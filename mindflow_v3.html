@@ -69,6 +69,7 @@
   }
   .mm-node:hover { box-shadow: 0 2px 14px var(--shadow); }
   .mm-node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--selected-ring); z-index: 5; }
+  .mm-node.multi-selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(106,155,204,0.35); z-index: 4; opacity: 0.9; }
   .mm-node.drag-over { border-color: var(--success) !important; box-shadow: 0 0 0 3px rgba(93,170,93,0.4) !important; }
   .mm-node.drop-above { border-top: 3px solid var(--accent) !important; }
   .mm-node.drop-below { border-bottom: 3px solid var(--accent) !important; }
@@ -80,7 +81,11 @@
   .mm-node.lvl-3.selected, .mm-node.lvl-4.selected { border-color: var(--accent); border-radius: 5px; background: var(--surface2); }
   .mm-node .node-text { outline: none; min-width: 20px; white-space: nowrap; }
   .mm-node .node-text[contenteditable="true"] { cursor: text; border-bottom: 1px dashed var(--accent); }
+  .mm-node .node-img { max-width: 160px; max-height: 100px; border-radius: 4px; margin-bottom: 2px; display: block; pointer-events: none; }
+  .mm-node.has-image { flex-direction: column; align-items: center; min-height: auto; height: auto !important; }
   .mm-node .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 6px; flex-shrink: 0; opacity: 0.7; }
+  .mm-node .link-icon { font-size: 9px; margin-left: 4px; color: var(--accent); cursor: pointer; opacity: 0.7; flex-shrink: 0; }
+  .mm-node .link-icon:hover { opacity: 1; }
   .mm-node .collapse-dot {
     position: absolute; right: -13px; top: 50%; transform: translateY(-50%);
     width: 16px; height: 16px; border-radius: 50%;
@@ -302,7 +307,7 @@
   .ol-item .ol-markers { font-size: 9px; }
 
   /* ── Zen Mode ── */
-  body.zen-mode .toolbar, body.zen-mode .status-bar, body.zen-mode .right-panel, body.zen-mode .outliner-panel { display: none !important; }
+  body.zen-mode .toolbar, body.zen-mode .status-bar, body.zen-mode .sheet-tabs, body.zen-mode .right-panel, body.zen-mode .fmt-panel, body.zen-mode .outliner-panel { display: none !important; }
   body.zen-mode #viewport { top: 0; bottom: 0; }
   .zen-exit {
     position: fixed; top: 12px; right: 12px; z-index: 999;
@@ -320,6 +325,109 @@
     box-shadow: 0 4px 20px var(--shadow);
   }
   .mm-node.floating-root.selected { border-color: var(--accent); border-style: solid; box-shadow: 0 4px 20px var(--shadow), 0 0 0 3px var(--selected-ring); }
+
+  /* ── Node Shapes ── */
+  .mm-node.shape-rect { border-radius: 4px; }
+  .mm-node.shape-rounded { border-radius: 14px; }
+  .mm-node.shape-pill { border-radius: 999px; }
+  .mm-node.shape-diamond { border-radius: 2px; transform-origin: center; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); padding: 14px 28px; }
+  .mm-node.shape-underline { background: transparent !important; border: none !important; border-bottom: 2px solid var(--border) !important; border-radius: 0 !important; box-shadow: none !important; }
+  .mm-node.shape-underline.selected { border-bottom-color: var(--accent) !important; box-shadow: none !important; }
+  .mm-node.shape-none { background: transparent !important; border: none !important; border-radius: 0 !important; box-shadow: none !important; }
+  .mm-node.shape-none.selected { box-shadow: 0 0 0 2px var(--selected-ring) !important; }
+  .mm-node.shape-ellipse { border-radius: 50%; padding: 10px 24px; }
+
+  /* ── Format Panel ── */
+  .fmt-panel {
+    position: fixed; right: 0; top: 44px; bottom: 26px; width: 280px; z-index: 150;
+    background: var(--bg2); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform 0.2s ease; overflow: hidden;
+  }
+  .fmt-panel.open { transform: translateX(0); }
+  .fmt-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .fmt-tab {
+    flex: 1; padding: 8px 0; text-align: center; font-size: 11px; font-weight: 600;
+    color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.12s;
+  }
+  .fmt-tab:hover { color: var(--text2); }
+  .fmt-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .fmt-body { flex: 1; padding: 10px 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .fmt-section { display: flex; flex-direction: column; gap: 6px; }
+  .fmt-section-title {
+    font-size: 10px; font-weight: 700; color: var(--text2); display: flex; align-items: center; gap: 6px;
+    cursor: pointer; user-select: none;
+  }
+  .fmt-section-title::before { content: '▼'; font-size: 7px; transition: transform 0.15s; }
+  .fmt-section.collapsed .fmt-section-title::before { transform: rotate(-90deg); }
+  .fmt-section.collapsed .fmt-section-content { display: none; }
+  .fmt-section-content { display: flex; flex-direction: column; gap: 6px; }
+  .fmt-row { display: flex; align-items: center; gap: 8px; }
+  .fmt-label { font-size: 10px; color: var(--muted); min-width: 36px; flex-shrink: 0; }
+  .fmt-shapes { display: flex; gap: 4px; flex-wrap: wrap; }
+  .fmt-shape-btn {
+    width: 32px; height: 26px; border: 1.5px solid var(--border); border-radius: 4px;
+    background: var(--surface); cursor: pointer; display: flex; align-items: center;
+    justify-content: center; transition: all 0.1s; color: var(--text2); font-size: 10px;
+  }
+  .fmt-shape-btn:hover { border-color: var(--accent); color: var(--text); }
+  .fmt-shape-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+  .fmt-color-row { display: flex; align-items: center; gap: 6px; }
+  .fmt-color-swatch {
+    width: 28px; height: 22px; border-radius: 4px; border: 1.5px solid var(--border);
+    cursor: pointer; transition: all 0.1s; flex-shrink: 0;
+  }
+  .fmt-color-swatch:hover { transform: scale(1.1); }
+  .fmt-color-input {
+    width: 1px; height: 1px; opacity: 0; position: absolute; pointer-events: none;
+  }
+  .fmt-select {
+    flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 5px;
+    color: var(--text); font: 400 11px 'DM Sans', sans-serif; padding: 4px 6px; outline: none; cursor: pointer;
+  }
+  .fmt-select:focus { border-color: var(--accent); }
+  .fmt-number {
+    width: 50px; background: var(--surface); border: 1px solid var(--border); border-radius: 5px;
+    color: var(--text); font: 400 11px 'DM Sans', sans-serif; padding: 4px 6px; outline: none; text-align: center;
+  }
+  .fmt-number:focus { border-color: var(--accent); }
+  .fmt-text-btns { display: flex; gap: 2px; }
+  .fmt-text-btn {
+    width: 30px; height: 26px; border: 1px solid var(--border); border-radius: 4px;
+    background: var(--surface); cursor: pointer; display: flex; align-items: center;
+    justify-content: center; transition: all 0.1s; font-size: 12px; color: var(--text2);
+  }
+  .fmt-text-btn:hover { border-color: var(--accent); color: var(--text); }
+  .fmt-text-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+  .fmt-align-btns { display: flex; gap: 2px; }
+  .fmt-border-row { display: flex; align-items: center; gap: 6px; }
+
+  /* ── Sheet Tabs ── */
+  .sheet-tabs {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 200; height: 26px;
+    display: flex; align-items: center; padding: 0 8px;
+    background: var(--bg2); border-top: 1px solid var(--border);
+    font: 400 10px 'DM Sans', sans-serif; color: var(--muted);
+  }
+  .sheet-tab {
+    padding: 3px 12px; cursor: pointer; border-radius: 4px 4px 0 0; font-size: 10px;
+    color: var(--text2); transition: all 0.1s; border: 1px solid transparent;
+    border-bottom: none; margin-right: 2px; position: relative; white-space: nowrap;
+  }
+  .sheet-tab:hover { background: var(--surface2); color: var(--text); }
+  .sheet-tab.active { background: var(--surface); color: var(--accent); border-color: var(--border); font-weight: 600; }
+  .sheet-tab .sheet-close {
+    margin-left: 6px; font-size: 9px; opacity: 0.5; cursor: pointer;
+  }
+  .sheet-tab .sheet-close:hover { opacity: 1; color: var(--danger); }
+  .sheet-add-btn {
+    background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--muted);
+    cursor: pointer; width: 22px; height: 18px; display: flex; align-items: center;
+    justify-content: center; font-size: 13px; margin-left: 4px; transition: all 0.1s;
+  }
+  .sheet-add-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--accent); }
+  .sheet-spacer { flex: 1; }
+  .sheet-zoom { font: 500 10px 'JetBrains Mono', monospace; color: var(--muted); padding-right: 8px; }
 </style>
 </head>
 <body>
@@ -343,12 +451,22 @@
   <button class="tb-btn" onclick="toggleCollapseSelected()"><span class="ic">◇</span> Fold</button>
   <button class="tb-btn" onclick="expandAll()"><span class="ic">⊞</span> All</button>
   <div class="sep"></div>
+  <select class="fmt-select" id="layoutSelect" onchange="changeLayout(this.value)" style="width:auto;font-size:10px;padding:3px 6px" title="Map Layout">
+    <option value="bilateral">⇔ Bilateral</option>
+    <option value="right">→ Right</option>
+    <option value="left">← Left</option>
+    <option value="orgchart">↕ Org Chart</option>
+    <option value="tree">↳ Tree</option>
+  </select>
+  <div class="sep"></div>
   <button class="tb-btn" onclick="startRelationship()" id="btnRel" title="Draw relationship line"><span class="ic">↔</span> Relate</button>
   <button class="tb-btn" onclick="addBoundary()" title="Group selected node's siblings"><span class="ic">▢</span> Boundary</button>
   <button class="tb-btn" onclick="addSummary()" title="Add summary to selected"><span class="ic">⌐</span> Summary</button>
   <button class="tb-btn" onclick="showMarkerPicker(event)" title="Add marker/icon"><span class="ic">⚑</span> Marker</button>
+  <button class="tb-btn" onclick="toggleNumbering()" id="btnNumber" title="Auto numbering"><span class="ic">#</span></button>
   <div class="spacer"></div>
   <button class="tb-btn" onclick="toggleOutliner()" id="btnOutliner"><span class="ic">☰</span> Outline</button>
+  <button class="tb-btn" onclick="togglePanel('format')" id="btnFormat"><span class="ic">◧</span> Format</button>
   <button class="tb-btn" onclick="togglePanel('notes')" id="btnNotes"><span class="ic">≡</span> Notes</button>
   <button class="tb-btn" onclick="togglePanel('themes')" id="btnThemes"><span class="ic">◉</span> Themes</button>
   <button class="tb-btn" onclick="toggleZen()" title="Zen Mode"><span class="ic">⊡</span></button>
@@ -401,6 +519,8 @@
   <div class="ctx-item" onclick="showNodeColorPicker(event)"><span class="ctx-ic">◉</span> Color</div>
   <div class="ctx-item" onclick="showMarkerPicker(event)"><span class="ctx-ic">⚑</span> Markers</div>
   <div class="ctx-item" onclick="startRelationship()"><span class="ctx-ic">↔</span> Relationship</div>
+  <div class="ctx-item" onclick="insertImage()"><span class="ctx-ic">🖼</span> Insert Image</div>
+  <div class="ctx-item" onclick="linkToNode()"><span class="ctx-ic">⤻</span> Link to Node</div>
   <div class="ctx-item" onclick="detachAsFloating()"><span class="ctx-ic">⊙</span> Detach as Floating Topic</div>
   <div class="ctx-item" onclick="copyNode()"><span class="ctx-ic">⧉</span> Copy <span class="ctx-key">Ctrl+C</span></div>
   <div class="ctx-item" onclick="cutNode()"><span class="ctx-ic">✂</span> Cut <span class="ctx-key">Ctrl+X</span></div>
@@ -434,17 +554,151 @@
   <div class="outliner-list" id="outlinerList"></div>
 </div>
 
+<!-- ═══ Format Panel ═══ -->
+<div class="fmt-panel" id="fmtPanel">
+  <div class="rp-header"><span>Format</span><button class="rp-close" onclick="togglePanel('format')">×</button></div>
+  <div class="fmt-tabs">
+    <div class="fmt-tab active" data-ftab="style" onclick="switchFmtTab('style')">樣式</div>
+    <div class="fmt-tab" data-ftab="text" onclick="switchFmtTab('text')">文字</div>
+  </div>
+  <div class="fmt-body" id="fmtBody">
+    <!-- Style tab -->
+    <div id="fmtStyleTab">
+      <div class="fmt-section">
+        <div class="fmt-section-title" onclick="this.parentElement.classList.toggle('collapsed')">形狀 Shape</div>
+        <div class="fmt-section-content">
+          <div class="fmt-shapes" id="fmtShapes"></div>
+        </div>
+      </div>
+      <div class="fmt-section">
+        <div class="fmt-section-title" onclick="this.parentElement.classList.toggle('collapsed')">底色 Fill</div>
+        <div class="fmt-section-content">
+          <div class="fmt-color-row">
+            <div class="fmt-color-swatch" id="fmtBgSwatch" onclick="document.getElementById('fmtBgInput').click()" style="background:#555"></div>
+            <input type="color" class="fmt-color-input" id="fmtBgInput" onchange="setNodeStyle('bgColor',this.value)">
+            <button class="fmt-text-btn" onclick="setNodeStyle('bgColor',null)" title="Reset" style="font-size:9px">✕</button>
+          </div>
+        </div>
+      </div>
+      <div class="fmt-section">
+        <div class="fmt-section-title" onclick="this.parentElement.classList.toggle('collapsed')">邊框 Border</div>
+        <div class="fmt-section-content">
+          <div class="fmt-border-row">
+            <select class="fmt-select" id="fmtBorderStyle" onchange="setNodeStyle('borderStyle',this.value||null)" style="max-width:80px">
+              <option value="">Default</option>
+              <option value="solid">── Solid</option>
+              <option value="dashed">╌╌ Dashed</option>
+              <option value="dotted">··· Dotted</option>
+              <option value="none">None</option>
+            </select>
+            <div class="fmt-color-swatch" id="fmtBorderSwatch" onclick="document.getElementById('fmtBorderInput').click()" style="background:#666"></div>
+            <input type="color" class="fmt-color-input" id="fmtBorderInput" onchange="setNodeStyle('borderColor',this.value)">
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-label">粗細</span>
+            <select class="fmt-select" id="fmtBorderWidth" onchange="setNodeStyle('borderWidth',this.value||null)">
+              <option value="">Default</option>
+              <option value="1px">細 Thin</option>
+              <option value="2px">中 Medium</option>
+              <option value="3px">粗 Thick</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="fmt-section">
+        <div class="fmt-section-title" onclick="this.parentElement.classList.toggle('collapsed')">連線 Connector</div>
+        <div class="fmt-section-content">
+          <div class="fmt-row">
+            <span class="fmt-label">樣式</span>
+            <select class="fmt-select" id="fmtConnStyle" onchange="setNodeStyle('connStyle',this.value||null)">
+              <option value="">Default</option>
+              <option value="curve">⌇ Curve</option>
+              <option value="straight">╲ Straight</option>
+              <option value="angular">⌐ Angular</option>
+              <option value="step">⊏ Step</option>
+            </select>
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-label">粗細</span>
+            <select class="fmt-select" id="fmtConnWidth" onchange="setNodeStyle('connWidth',this.value?parseFloat(this.value):null)">
+              <option value="">Default</option>
+              <option value="1">1px</option>
+              <option value="1.8">1.8px</option>
+              <option value="2.5">2.5px</option>
+              <option value="3.5">3.5px</option>
+            </select>
+          </div>
+          <div class="fmt-color-row">
+            <span class="fmt-label">顏色</span>
+            <div class="fmt-color-swatch" id="fmtConnColorSwatch" onclick="document.getElementById('fmtConnColorInput').click()" style="background:#555"></div>
+            <input type="color" class="fmt-color-input" id="fmtConnColorInput" onchange="setNodeStyle('connColor',this.value)">
+            <button class="fmt-text-btn" onclick="setNodeStyle('connColor',null)" title="Reset" style="font-size:9px">✕</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Text tab -->
+    <div id="fmtTextTab" style="display:none">
+      <div class="fmt-section">
+        <div class="fmt-section-title" onclick="this.parentElement.classList.toggle('collapsed')">文字 Text</div>
+        <div class="fmt-section-content">
+          <div class="fmt-row">
+            <select class="fmt-select" id="fmtFontFamily" onchange="setNodeStyle('fontFamily',this.value||null)">
+              <option value="">Default</option>
+              <option value="DM Sans">DM Sans</option>
+              <option value="Inter">Inter</option>
+              <option value="Arial">Arial</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Courier New">Courier New</option>
+              <option value="Comic Sans MS">Comic Sans MS</option>
+              <option value="Noto Sans TC">Noto Sans TC</option>
+            </select>
+            <input type="number" class="fmt-number" id="fmtFontSize" min="8" max="36" placeholder="--" onchange="setNodeStyle('fontSize',this.value?this.value+'px':null)">
+          </div>
+          <div class="fmt-row">
+            <select class="fmt-select" id="fmtFontWeight" onchange="setNodeStyle('fontWeight',this.value||null)" style="max-width:100px">
+              <option value="">Default</option>
+              <option value="400">Regular</option>
+              <option value="500">Medium</option>
+              <option value="600">Demibold</option>
+              <option value="700">Bold</option>
+            </select>
+            <div class="fmt-color-swatch" id="fmtFontColorSwatch" onclick="document.getElementById('fmtFontColorInput').click()" style="background:#eee"></div>
+            <input type="color" class="fmt-color-input" id="fmtFontColorInput" onchange="setNodeStyle('fontColor',this.value)">
+          </div>
+          <div class="fmt-text-btns">
+            <button class="fmt-text-btn" id="fmtBold" onclick="toggleNodeStyle('fontWeight','700')" title="Bold"><b>B</b></button>
+            <button class="fmt-text-btn" id="fmtItalic" onclick="toggleNodeStyle('italic')" title="Italic"><i>I</i></button>
+            <button class="fmt-text-btn" id="fmtStrike" onclick="toggleNodeStyle('strikethrough')" title="Strikethrough"><s>S</s></button>
+            <button class="fmt-text-btn" id="fmtUnderline" onclick="toggleNodeStyle('underline')" title="Underline"><u>U</u></button>
+          </div>
+          <div class="fmt-align-btns">
+            <button class="fmt-text-btn" onclick="setNodeStyle('textAlign','left')" title="Align Left">≡</button>
+            <button class="fmt-text-btn" onclick="setNodeStyle('textAlign','center')" title="Align Center">≡</button>
+            <button class="fmt-text-btn" onclick="setNodeStyle('textAlign','right')" title="Align Right">≡</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Zen Mode Exit Button -->
 <div class="zen-exit" onclick="toggleZen()">Exit Zen Mode (Esc)</div>
 
-<div class="status-bar">
-  <span id="statusNodes">0 nodes</span><span>|</span>
-  <span id="statusSelected">None</span><span>|</span>
-  <span id="statusUndo">-</span><span>|</span>
-  <span>Drag to rearrange · Double-click to edit · Scroll to zoom · Ctrl+F search · Ctrl+C/X/V copy</span>
+<!-- Sheet Tabs (replaces old status bar) -->
+<div class="sheet-tabs" id="sheetTabs">
+  <div class="sheet-tab active" id="sheetTab0" onclick="switchSheet(0)" ondblclick="renameSheet(0)">邏輯圖</div>
+  <button class="sheet-add-btn" onclick="addSheet()" title="New sheet">+</button>
+  <div class="sheet-spacer"></div>
+  <span id="statusNodes" style="margin-right:8px">0 nodes</span>
+  <span id="statusSelected" style="margin-right:8px">None</span>
+  <span id="statusUndo" style="margin-right:8px">-</span>
+  <span class="sheet-zoom" id="zoomLabel2">80%</span>
 </div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleImport(event)">
+<input type="file" id="imageInput" accept="image/*" style="display:none" onchange="handleImageInsert(event)">
 
 <script>
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -498,7 +752,7 @@ const PADDINGS = [48, 32, 24, 20, 20];
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  DATA MODEL
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-let nid = 1, NM = {}, root = null, selectedId = null;
+let nid = 1, NM = {}, root = null, selectedId = null, multiSelected = new Set();
 let relationships = []; // {id, fromId, toId, label}
 let boundaries = [];    // {id, nodeIds:[], color, label}
 let summaries = [];     // {id, nodeIds:[], label}
@@ -527,7 +781,18 @@ const MARKERS = {
 };
 
 function mk(text, parentId = null) {
-  return { id: nid++, text, parentId, children: [], collapsed: false, color: null, note: '', link: '', x: 0, y: 0, side: null, markers: [], floatX: null, floatY: null };
+  return { id: nid++, text, parentId, children: [], collapsed: false, color: null, note: '', link: '', x: 0, y: 0, side: null, markers: [], floatX: null, floatY: null,
+    // Style properties
+    shape: null, bgColor: null, borderStyle: null, borderColor: null, borderWidth: null,
+    fontFamily: null, fontSize: null, fontWeight: null, fontColor: null,
+    italic: false, strikethrough: false, underline: false, textAlign: null,
+    // Image
+    image: null, imageWidth: 120,
+    // Connector style (applied to edges from this node to children)
+    connStyle: null, connWidth: null, connColor: null, // connStyle: 'curve','straight','angular','step'
+    // Internal link to another node
+    linkedNodeId: null,
+  };
 }
 
 function getActiveTheme() {
@@ -563,9 +828,9 @@ function visKids(id) { const n = NM[id]; if (!n || n.collapsed) return []; retur
 //  UNDO / REDO
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let undoStack = [], redoStack = [];
-function snapshot() { return JSON.stringify({ nm: serializeAll(), sel: selectedId, nid, themeId: activeThemeId, canvasBg, rainbow: rainbowBranches, rels: relationships.map(r=>({...r})), bnds: boundaries.map(b=>({...b, nodeIds:[...b.nodeIds]})), sums: summaries.map(s=>({...s, nodeIds:[...s.nodeIds]})), relIdC: relIdCounter, bndIdC: bndIdCounter, sumIdC: sumIdCounter, floats: [...floatingTopics] }); }
-function serializeAll() { const o = {}; for (const [k, n] of Object.entries(NM)) o[k] = { id:n.id, text:n.text, parentId:n.parentId, children:[...n.children], collapsed:n.collapsed, color:n.color, note:n.note, link:n.link, side:n.side, markers:[...(n.markers||[])], floatX:n.floatX, floatY:n.floatY }; return o; }
-function restoreSnapshot(s) { const d = JSON.parse(s); NM = {}; nid = d.nid; for (const [k, v] of Object.entries(d.nm)) NM[k] = { ...v, x:0, y:0, markers: v.markers||[], floatX: v.floatX||null, floatY: v.floatY||null }; root = NM[Object.values(NM).find(n=>n.parentId===null && !(d.floats||[]).includes(n.id))?.id]; selectedId = NM[d.sel]?d.sel:root?.id; if(d.themeId) activeThemeId=d.themeId; if(d.canvasBg!==undefined) canvasBg=d.canvasBg; if(d.rainbow!==undefined) rainbowBranches=d.rainbow; relationships=d.rels||[]; boundaries=d.bnds||[]; summaries=d.sums||[]; relIdCounter=d.relIdC||1; bndIdCounter=d.bndIdC||1; sumIdCounter=d.sumIdC||1; floatingTopics=d.floats||[]; }
+function snapshot() { return JSON.stringify({ nm: serializeAll(), sel: selectedId, nid, themeId: activeThemeId, canvasBg, rainbow: rainbowBranches, rels: relationships.map(r=>({...r})), bnds: boundaries.map(b=>({...b, nodeIds:[...b.nodeIds]})), sums: summaries.map(s=>({...s, nodeIds:[...s.nodeIds]})), relIdC: relIdCounter, bndIdC: bndIdCounter, sumIdC: sumIdCounter, floats: [...floatingTopics], layout: mapLayout, connStyle: mapConnStyle }); }
+function serializeAll() { const o = {}; for (const [k, n] of Object.entries(NM)) o[k] = { id:n.id, text:n.text, parentId:n.parentId, children:[...n.children], collapsed:n.collapsed, color:n.color, note:n.note, link:n.link, side:n.side, markers:[...(n.markers||[])], floatX:n.floatX, floatY:n.floatY, shape:n.shape, bgColor:n.bgColor, borderStyle:n.borderStyle, borderColor:n.borderColor, borderWidth:n.borderWidth, fontFamily:n.fontFamily, fontSize:n.fontSize, fontWeight:n.fontWeight, fontColor:n.fontColor, italic:n.italic, strikethrough:n.strikethrough, underline:n.underline, textAlign:n.textAlign, image:n.image, imageWidth:n.imageWidth, connStyle:n.connStyle, connWidth:n.connWidth, connColor:n.connColor }; return o; }
+function restoreSnapshot(s) { const d = JSON.parse(s); NM = {}; nid = d.nid; for (const [k, v] of Object.entries(d.nm)) NM[k] = { ...v, x:0, y:0, markers: v.markers||[], floatX: v.floatX||null, floatY: v.floatY||null, shape:v.shape||null, bgColor:v.bgColor||null, borderStyle:v.borderStyle||null, borderColor:v.borderColor||null, borderWidth:v.borderWidth||null, fontFamily:v.fontFamily||null, fontSize:v.fontSize||null, fontWeight:v.fontWeight||null, fontColor:v.fontColor||null, italic:!!v.italic, strikethrough:!!v.strikethrough, underline:!!v.underline, textAlign:v.textAlign||null, image:v.image||null, imageWidth:v.imageWidth||120, connStyle:v.connStyle||null, connWidth:v.connWidth||null, connColor:v.connColor||null }; root = NM[Object.values(NM).find(n=>n.parentId===null && !(d.floats||[]).includes(n.id))?.id]; selectedId = NM[d.sel]?d.sel:root?.id; if(d.themeId) activeThemeId=d.themeId; if(d.canvasBg!==undefined) canvasBg=d.canvasBg; if(d.rainbow!==undefined) rainbowBranches=d.rainbow; relationships=d.rels||[]; boundaries=d.bnds||[]; summaries=d.sums||[]; relIdCounter=d.relIdC||1; bndIdCounter=d.bndIdC||1; sumIdCounter=d.sumIdC||1; floatingTopics=d.floats||[]; if(d.layout) mapLayout=d.layout; if(d.connStyle!==undefined) mapConnStyle=d.connStyle; const ls=document.getElementById('layoutSelect'); if(ls) ls.value=mapLayout; }
 function pushUndo() { undoStack.push(snapshot()); if (undoStack.length > 60) undoStack.shift(); redoStack = []; updateUndoStatus(); }
 function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); restoreSnapshot(undoStack.pop()); applyCanvasBg(); render(); updateUndoStatus(); toast('Undo'); }
 function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restoreSnapshot(redoStack.pop()); applyCanvasBg(); render(); updateUndoStatus(); toast('Redo'); }
@@ -575,7 +840,48 @@ function updateUndoStatus() { document.getElementById('statusUndo').textContent 
 //  LAYOUT
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function assignSides() { if (!root) return; root.children.filter(c => NM[c]).forEach((cid, i) => { NM[cid].side = i % 2 === 0 ? 'right' : 'left'; }); }
+let mapLayout = 'bilateral'; // 'bilateral', 'right', 'left', 'orgchart', 'tree'
+function changeLayout(layout) { pushUndo(); mapLayout = layout; render(); toast('Layout: ' + layout); }
+
+let autoNumbering = false; // 'none', '1.', 'a.', 'i.'
+let numberingStyle = '1'; // '1' = 1.2.3, 'a' = a.b.c, 'i' = i.ii.iii
+function getNumberPrefix(id) {
+  if (!autoNumbering) return '';
+  const n = NM[id]; if (!n || !n.parentId) return '';
+  const par = NM[n.parentId]; if (!par) return '';
+  const idx = par.children.indexOf(id);
+  if (idx < 0) return '';
+  const parentPrefix = n.parentId === root?.id ? '' : getNumberPrefix(n.parentId);
+  let num;
+  if (numberingStyle === 'a') {
+    num = String.fromCharCode(97 + (idx % 26));
+  } else if (numberingStyle === 'i') {
+    const romans = ['i','ii','iii','iv','v','vi','vii','viii','ix','x'];
+    num = romans[idx] || (idx + 1);
+  } else {
+    num = idx + 1;
+  }
+  return parentPrefix ? parentPrefix + '.' + num : '' + num;
+}
+function toggleNumbering() {
+  if (!autoNumbering) { autoNumbering = true; numberingStyle = '1'; }
+  else if (numberingStyle === '1') { numberingStyle = 'a'; }
+  else if (numberingStyle === 'a') { numberingStyle = 'i'; }
+  else { autoNumbering = false; }
+  document.getElementById('btnNumber').classList.toggle('active', autoNumbering);
+  render();
+  toast(autoNumbering ? 'Numbering: ' + (numberingStyle === '1' ? '1.2.3' : numberingStyle === 'a' ? 'a.b.c' : 'i.ii.iii') : 'Numbering off');
+}
+
 function subtreeH(id) { const kids = visKids(id); const self = NODE_H[lvl(id)]; if (!kids.length) return self; let t = 0; kids.forEach((c, i) => { t += subtreeH(c); if (i < kids.length - 1) t += V_GAP; }); return Math.max(t, self); }
+function subtreeW(id) {
+  const kids = visKids(id); const d = depth(id);
+  const self = estW(NM[id].text, d);
+  if (!kids.length) return self;
+  let t = 0; kids.forEach((c, i) => { t += subtreeW(c); if (i < kids.length - 1) t += 20; });
+  return Math.max(t, self);
+}
+
 function layoutBranch(id, x, cy, dir) {
   const n = NM[id]; n.x = x; n.y = cy; const kids = visKids(id); if (!kids.length) return;
   const d = depth(id); const gap = H_GAPS[Math.min(d, 4)] || 140;
@@ -584,13 +890,66 @@ function layoutBranch(id, x, cy, dir) {
   let y = cy - totalH / 2;
   kids.forEach(c => { const sh = subtreeH(c); layoutBranch(c, childX, y + sh / 2, dir); y += sh + V_GAP; });
 }
+
+function layoutOrgChart(id, cx, topY) {
+  // Top-down organizational chart
+  const n = NM[id]; n.x = cx; n.y = topY;
+  const kids = visKids(id); if (!kids.length) return;
+  const vGap = 60;
+  const childY = topY + vGap;
+  const totalW = kids.reduce((s, c, i) => s + subtreeW(c) + (i > 0 ? 30 : 0), 0);
+  let x = cx - totalW / 2;
+  kids.forEach(c => { const sw = subtreeW(c); layoutOrgChart(c, x + sw / 2, childY); x += sw + 30; });
+}
+
+function layoutTreeDown(id, startX, topY) {
+  // Indented tree layout going down-right
+  const n = NM[id]; n.x = startX; n.y = topY;
+  const kids = visKids(id); if (!kids.length) return;
+  const hIndent = 40;
+  let y = topY + NODE_H[lvl(id)] + 4;
+  kids.forEach(c => {
+    layoutTreeDown(c, startX + hIndent, y);
+    y += subtreeHTree(c) + 4;
+  });
+}
+function subtreeHTree(id) {
+  const kids = visKids(id); const self = NODE_H[lvl(id)];
+  if (!kids.length) return self;
+  let t = self + 4;
+  kids.forEach((c, i) => { t += subtreeHTree(c) + (i > 0 ? 4 : 0); });
+  return t;
+}
+
 function doLayout() {
-  if (!root) return; assignSides(); root.x = ORIGIN_X; root.y = ORIGIN_Y;
+  if (!root) return;
+  if (mapLayout === 'orgchart') {
+    root.x = ORIGIN_X; root.y = ORIGIN_Y;
+    layoutOrgChart(root.id, ORIGIN_X, ORIGIN_Y);
+    return;
+  }
+  if (mapLayout === 'tree') {
+    root.x = ORIGIN_X - 200; root.y = ORIGIN_Y - 200;
+    layoutTreeDown(root.id, ORIGIN_X - 200, ORIGIN_Y - 200);
+    return;
+  }
+  assignSides();
+  root.x = ORIGIN_X; root.y = ORIGIN_Y;
+  if (mapLayout === 'right' || mapLayout === 'left') {
+    const dir = mapLayout;
+    const allKids = visKids(root.id);
+    allKids.forEach(c => NM[c].side = dir);
+    const gap = H_GAPS[0];
+    const sign = dir === 'right' ? 1 : -1;
+    let tot = allKids.reduce((s, c, i) => s + subtreeH(c) + (i > 0 ? V_GAP : 0), 0), y = ORIGIN_Y - tot / 2;
+    allKids.forEach(c => { const sh = subtreeH(c); layoutBranch(c, ORIGIN_X + sign * gap, y + sh / 2, dir); y += sh + V_GAP; });
+    return;
+  }
+  // bilateral (default)
   const rKids = visKids(root.id).filter(c => NM[c].side === 'right');
   const lKids = visKids(root.id).filter(c => NM[c].side === 'left');
-  const rGap = H_GAPS[0];
   let rTot = rKids.reduce((s, c, i) => s + subtreeH(c) + (i > 0 ? V_GAP : 0), 0), ry = ORIGIN_Y - rTot / 2;
-  rKids.forEach(c => { const sh = subtreeH(c); layoutBranch(c, ORIGIN_X + rGap, ry + sh / 2, 'right'); ry += sh + V_GAP; });
+  rKids.forEach(c => { const sh = subtreeH(c); layoutBranch(c, ORIGIN_X + H_GAPS[0], ry + sh / 2, 'right'); ry += sh + V_GAP; });
   let lTot = lKids.reduce((s, c, i) => s + subtreeH(c) + (i > 0 ? V_GAP : 0), 0), ly = ORIGIN_Y - lTot / 2;
   lKids.forEach(c => { const sh = subtreeH(c); layoutBranch(c, ORIGIN_X - H_GAPS[0], ly + sh / 2, 'left'); ly += sh + V_GAP; });
 }
@@ -614,23 +973,77 @@ function render() {
   drawRelationships(); drawSummaries(); drawNodes(root.id);
   // Draw floating topic nodes
   floatingTopics.forEach(fid => { if (NM[fid]) drawFloatingNodes(fid); });
-  applyTransform(); updateStatus(); syncNotesPanel(); renderThemePanel(); renderOutliner();
+  applyTransform(); updateStatus(); syncNotesPanel(); renderThemePanel(); syncFormatPanel(); renderOutliner(); renderSheetTabs();
 }
+
+function getConnStyle(id) {
+  // Walk up to find inherited connector style
+  let n = NM[id];
+  while (n) {
+    if (n.connStyle) return n.connStyle;
+    if (!n.parentId) break;
+    n = NM[n.parentId];
+  }
+  return mapConnStyle || 'curve'; // default curve
+}
+let mapConnStyle = null; // global default connector style
 
 function drawEdges(id) {
   const n = NM[id]; const d = depth(id);
   visKids(id).forEach(cid => {
-    const c = NM[cid]; const col = branchColor(cid); const side = branchSide(cid);
-    const pw = estW(n.text, d), cw = estW(c.text, depth(cid));
-    let x1, x2;
-    if (side === 'right') { x1 = n.x + pw/2 + 4; x2 = c.x - cw/2 - 2; }
-    else { x1 = n.x - pw/2 - 4; x2 = c.x + cw/2 + 2; }
-    const dx = x2 - x1;
+    const c = NM[cid]; const col = n.connColor || branchColor(cid);
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', `M${x1},${n.y} C${x1+dx*0.4},${n.y} ${x2-dx*0.4},${c.y} ${x2},${c.y}`);
+    let pathD;
+    const style = getConnStyle(id);
+    const w = n.connWidth || 1.8;
+
+    if (mapLayout === 'orgchart') {
+      // Vertical connectors for org chart
+      const nh = NODE_H[lvl(id)] / 2;
+      const ch = NODE_H[lvl(cid)] / 2;
+      const y1 = n.y + nh, y2 = c.y - ch;
+      const my = y1 + (y2 - y1) * 0.5;
+      if (style === 'straight') { pathD = `M${n.x},${y1} L${c.x},${y2}`; }
+      else if (style === 'angular' || style === 'step') { pathD = `M${n.x},${y1} V${my} H${c.x} V${y2}`; }
+      else { pathD = `M${n.x},${y1} C${n.x},${my} ${c.x},${my} ${c.x},${y2}`; }
+    } else if (mapLayout === 'tree') {
+      // Indented tree connectors
+      const pw = estW(n.text, d);
+      pathD = `M${n.x},${n.y + NODE_H[lvl(id)]/2} V${c.y} H${c.x - estW(c.text, depth(cid))/2}`;
+    } else {
+      // Horizontal layouts (bilateral, right, left)
+      const side = branchSide(cid);
+      const pw = estW(n.text, d), cw = estW(c.text, depth(cid));
+      let x1, x2;
+      if (side === 'right') { x1 = n.x + pw/2 + 4; x2 = c.x - cw/2 - 2; }
+      else { x1 = n.x - pw/2 - 4; x2 = c.x + cw/2 + 2; }
+      const dx = x2 - x1;
+      if (style === 'straight') { pathD = `M${x1},${n.y} L${x2},${c.y}`; }
+      else if (style === 'angular') { const mx = x1 + dx * 0.5; pathD = `M${x1},${n.y} L${mx},${n.y} L${mx},${c.y} L${x2},${c.y}`; }
+      else if (style === 'step') { const mx = x1 + dx * 0.35; pathD = `M${x1},${n.y} H${mx} V${c.y} H${x2}`; }
+      else { pathD = `M${x1},${n.y} C${x1+dx*0.4},${n.y} ${x2-dx*0.4},${c.y} ${x2},${c.y}`; }
+    }
+    path.setAttribute('d', pathD);
     path.setAttribute('stroke', col); path.setAttribute('opacity', '0.4');
+    path.setAttribute('stroke-width', w);
     svg.appendChild(path); drawEdges(cid);
   });
+}
+
+function applyNodeStyles(el, n, txt) {
+  if (n.shape) el.classList.add('shape-' + n.shape);
+  if (n.bgColor) el.style.background = n.bgColor;
+  if (n.borderStyle) el.style.borderStyle = n.borderStyle;
+  if (n.borderColor) el.style.borderColor = n.borderColor;
+  if (n.borderWidth) el.style.borderWidth = n.borderWidth;
+  if (n.fontFamily) txt.style.fontFamily = n.fontFamily;
+  if (n.fontSize) txt.style.fontSize = n.fontSize;
+  if (n.fontWeight) txt.style.fontWeight = n.fontWeight;
+  if (n.fontColor) txt.style.color = n.fontColor;
+  if (n.italic) txt.style.fontStyle = 'italic';
+  if (n.strikethrough) txt.style.textDecoration = (txt.style.textDecoration || '') + ' line-through';
+  if (n.underline) txt.style.textDecoration = (txt.style.textDecoration || '') + ' underline';
+  if (n.textAlign) { el.style.justifyContent = n.textAlign === 'left' ? 'flex-start' : n.textAlign === 'right' ? 'flex-end' : 'center'; txt.style.textAlign = n.textAlign; }
 }
 
 function drawNodes(id) {
@@ -639,12 +1052,23 @@ function drawNodes(id) {
   const el = document.createElement('div');
   el.className = `mm-node lvl-${l}`;
   if (id === selectedId) el.classList.add('selected');
+  else if (multiSelected.has(id)) el.classList.add('multi-selected');
   if (n.collapsed && n.children.length) el.classList.add('collapsed');
   if (side === 'left') el.classList.add('side-left');
   if (d >= 1 && d <= 2) { const c = branchColor(id); const p = side === 'left' ? 'borderRight' : 'borderLeft'; el.style[p+'Color'] = c; el.style[p+'Width'] = '3px'; el.style[p+'Style'] = 'solid'; }
   if (d === 0) el.style.background = n.color || getActiveTheme().root;
 
-  const txt = document.createElement('span'); txt.className = 'node-text'; txt.textContent = n.text; el.appendChild(txt);
+  // Render image if present
+  if (n.image) {
+    el.classList.add('has-image');
+    const img = document.createElement('img'); img.className = 'node-img'; img.src = n.image;
+    img.style.width = (n.imageWidth || 120) + 'px';
+    el.appendChild(img);
+  }
+  const numPfx = getNumberPrefix(id);
+  const txt = document.createElement('span'); txt.className = 'node-text'; txt.textContent = (numPfx ? numPfx + '. ' : '') + n.text;
+  applyNodeStyles(el, n, txt);
+  el.appendChild(txt);
   // Render markers
   if (n.markers && n.markers.length) {
     const mc = document.createElement('span'); mc.className = 'node-markers';
@@ -652,6 +1076,12 @@ function drawNodes(id) {
       for (const cat of Object.values(MARKERS)) { const found = cat.items.find(i => i.id === mid); if (found) { const sp = document.createElement('span'); sp.className = 'node-marker'; sp.textContent = found.icon; sp.title = found.label; mc.appendChild(sp); } }
     });
     el.appendChild(mc);
+  }
+  if (n.linkedNodeId && NM[n.linkedNodeId]) {
+    const lnk = document.createElement('span'); lnk.className = 'link-icon'; lnk.textContent = '⤻';
+    lnk.title = 'Jump to: ' + NM[n.linkedNodeId].text;
+    lnk.addEventListener('click', e => { e.stopPropagation(); jumpToLinkedNode(id); });
+    el.appendChild(lnk);
   }
   if (n.note || n.link) { const dot = document.createElement('div'); dot.className = 'note-dot'; el.appendChild(dot); }
   if (n.children.length) {
@@ -707,15 +1137,31 @@ function drawFloatingNodes(id) {
   el.className = `mm-node lvl-${displayLvl}`;
   if (isFloatRoot) el.classList.add('floating-root');
   if (id === selectedId) el.classList.add('selected');
+  else if (multiSelected.has(id)) el.classList.add('multi-selected');
   if (n.collapsed && n.children.length) el.classList.add('collapsed');
   if (isFloatRoot && n.color) { el.style.borderColor = n.color; el.style.borderLeftWidth = '3px'; el.style.borderLeftStyle = 'solid'; }
   else if (!isFloatRoot && d >= 1 && d <= 2) { const c = branchColor(id); el.style.borderLeftColor = c; el.style.borderLeftWidth = '3px'; el.style.borderLeftStyle = 'solid'; }
 
-  const txt = document.createElement('span'); txt.className = 'node-text'; txt.textContent = n.text; el.appendChild(txt);
+  if (n.image) {
+    el.classList.add('has-image');
+    const img = document.createElement('img'); img.className = 'node-img'; img.src = n.image;
+    img.style.width = (n.imageWidth || 120) + 'px';
+    el.appendChild(img);
+  }
+  const numPfx2 = getNumberPrefix(id);
+  const txt = document.createElement('span'); txt.className = 'node-text'; txt.textContent = (numPfx2 ? numPfx2 + '. ' : '') + n.text;
+  applyNodeStyles(el, n, txt);
+  el.appendChild(txt);
   if (n.markers && n.markers.length) {
     const mc = document.createElement('span'); mc.className = 'node-markers';
     n.markers.forEach(mid => { for (const cat of Object.values(MARKERS)) { const found = cat.items.find(i => i.id === mid); if (found) { const sp = document.createElement('span'); sp.className = 'node-marker'; sp.textContent = found.icon; sp.title = found.label; mc.appendChild(sp); } } });
     el.appendChild(mc);
+  }
+  if (n.linkedNodeId && NM[n.linkedNodeId]) {
+    const lnk = document.createElement('span'); lnk.className = 'link-icon'; lnk.textContent = '⤻';
+    lnk.title = 'Jump to: ' + NM[n.linkedNodeId].text;
+    lnk.addEventListener('click', e => { e.stopPropagation(); jumpToLinkedNode(id); });
+    el.appendChild(lnk);
   }
   if (n.note || n.link) { const dot = document.createElement('div'); dot.className = 'note-dot'; el.appendChild(dot); }
   if (n.children.length) {
@@ -734,8 +1180,9 @@ function drawFloatingNodes(id) {
 
 function onFloatingMouseDown(e, id) {
   if (e.button !== 0) return; e.stopPropagation();
+  if (linkMode) { finishLinkToNode(id); return; }
   if (relMode) { finishRelationship(id); return; }
-  selectNode(id);
+  selectNode(id, e.ctrlKey || e.metaKey);
   const isFloatRoot = floatingTopics.includes(id);
   const sx = e.clientX, sy = e.clientY; let dragging = false, ghost = null;
 
@@ -862,6 +1309,57 @@ function detachAsFloating() {
   render(); toast('Detached as floating topic');
 }
 
+function insertImage() {
+  closeMenus();
+  if (!selectedId) { toast('Select a node first'); return; }
+  document.getElementById('imageInput').click();
+}
+function handleImageInsert(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    if (!selectedId || !NM[selectedId]) return;
+    pushUndo();
+    NM[selectedId].image = ev.target.result;
+    render(); toast('Image added');
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+function removeImage() {
+  if (!selectedId || !NM[selectedId]) return;
+  pushUndo(); NM[selectedId].image = null; render(); toast('Image removed');
+}
+
+let linkMode = false;
+function linkToNode() {
+  closeMenus();
+  if (!selectedId) { toast('Select a source node first'); return; }
+  linkMode = selectedId;
+  toast('Click another node to create internal link...');
+}
+function finishLinkToNode(targetId) {
+  if (!linkMode || !NM[linkMode]) { linkMode = false; return; }
+  if (targetId === linkMode) { toast('Cannot link to self'); linkMode = false; return; }
+  pushUndo();
+  NM[linkMode].linkedNodeId = targetId;
+  toast('Linked to: ' + NM[targetId].text);
+  linkMode = false; render();
+}
+function jumpToLinkedNode(id) {
+  const n = NM[id]; if (!n || !n.linkedNodeId || !NM[n.linkedNodeId]) return;
+  selectNode(n.linkedNodeId);
+  // Expand path to target
+  let cur = NM[n.linkedNodeId];
+  while (cur && cur.parentId) { const par = NM[cur.parentId]; if (par && par.collapsed) par.collapsed = false; cur = NM[cur.parentId]; }
+  render();
+  // Pan to target
+  const tgt = NM[n.linkedNodeId];
+  panX = viewport.clientWidth / 2 - tgt.x * scale;
+  panY = viewport.clientHeight / 2 - tgt.y * scale;
+  applyTransform();
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  THEME PANEL LOGIC
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -961,13 +1459,158 @@ function applyCanvasBg() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  FORMAT PANEL
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const NODE_SHAPES = [
+  { id: null,        label: 'Auto', icon: '▭' },
+  { id: 'rect',      label: 'Rect', icon: '▬' },
+  { id: 'rounded',   label: 'Round', icon: '▢' },
+  { id: 'pill',      label: 'Pill', icon: '⬭' },
+  { id: 'ellipse',   label: 'Oval', icon: '⬮' },
+  { id: 'underline', label: 'Line', icon: '▁' },
+  { id: 'none',      label: 'None', icon: '⊘' },
+];
+
+function switchFmtTab(tab) {
+  document.querySelectorAll('.fmt-tab').forEach(t => t.classList.toggle('active', t.dataset.ftab === tab));
+  document.getElementById('fmtStyleTab').style.display = tab === 'style' ? '' : 'none';
+  document.getElementById('fmtTextTab').style.display = tab === 'text' ? '' : 'none';
+}
+
+function syncFormatPanel() {
+  if (openPanelId !== 'format') return;
+  const n = selectedId ? NM[selectedId] : null;
+  // Shapes
+  const shapesEl = document.getElementById('fmtShapes');
+  shapesEl.innerHTML = '';
+  NODE_SHAPES.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'fmt-shape-btn' + (n && n.shape === s.id ? ' active' : (!n && !s.id ? '' : ''));
+    btn.textContent = s.icon;
+    btn.title = s.label;
+    btn.onclick = () => setNodeStyle('shape', s.id);
+    shapesEl.appendChild(btn);
+  });
+  // Colors
+  if (n) {
+    document.getElementById('fmtBgSwatch').style.background = n.bgColor || '#555';
+    document.getElementById('fmtBorderSwatch').style.background = n.borderColor || '#666';
+    document.getElementById('fmtFontColorSwatch').style.background = n.fontColor || '#eee';
+    document.getElementById('fmtBorderStyle').value = n.borderStyle || '';
+    document.getElementById('fmtBorderWidth').value = n.borderWidth || '';
+    document.getElementById('fmtFontFamily').value = n.fontFamily || '';
+    document.getElementById('fmtFontSize').value = n.fontSize ? parseInt(n.fontSize) : '';
+    document.getElementById('fmtFontWeight').value = n.fontWeight || '';
+    document.getElementById('fmtItalic').classList.toggle('active', !!n.italic);
+    document.getElementById('fmtStrike').classList.toggle('active', !!n.strikethrough);
+    document.getElementById('fmtUnderline').classList.toggle('active', !!n.underline);
+    document.getElementById('fmtBold').classList.toggle('active', n.fontWeight === '700');
+    document.getElementById('fmtConnStyle').value = n.connStyle || '';
+    document.getElementById('fmtConnWidth').value = n.connWidth || '';
+    document.getElementById('fmtConnColorSwatch').style.background = n.connColor || '#555';
+  }
+}
+
+function setNodeStyle(prop, value) {
+  if (!selectedId || !NM[selectedId]) return;
+  pushUndo();
+  NM[selectedId][prop] = value;
+  render(); syncFormatPanel();
+}
+
+function toggleNodeStyle(prop, val) {
+  if (!selectedId || !NM[selectedId]) return;
+  pushUndo();
+  const n = NM[selectedId];
+  if (prop === 'italic' || prop === 'strikethrough' || prop === 'underline') {
+    n[prop] = !n[prop];
+  } else if (prop === 'fontWeight') {
+    n.fontWeight = n.fontWeight === val ? null : val;
+  }
+  render(); syncFormatPanel();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  MULTI-SHEET
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let sheets = [{ name: '邏輯圖', data: null }];
+let activeSheetIdx = 0;
+
+function saveCurrentSheet() {
+  sheets[activeSheetIdx].data = snapshot();
+}
+
+function switchSheet(idx) {
+  if (idx === activeSheetIdx) return;
+  saveCurrentSheet();
+  activeSheetIdx = idx;
+  if (sheets[idx].data) {
+    restoreSnapshot(sheets[idx].data);
+    applyCanvasBg();
+  }
+  render(); renderSheetTabs();
+}
+
+function addSheet() {
+  saveCurrentSheet();
+  const name = '工作表 ' + (sheets.length + 1);
+  sheets.push({ name, data: null });
+  activeSheetIdx = sheets.length - 1;
+  // Init a fresh map for the new sheet
+  NM = {}; nid = 1; floatingTopics = []; relationships = []; boundaries = []; summaries = [];
+  root = mk('Central Topic'); NM[root.id] = root; root.color = getActiveTheme().root;
+  selectedId = root.id; undoStack = []; redoStack = [];
+  render(); renderSheetTabs(); toast('New sheet added');
+}
+
+function renameSheet(idx) {
+  const name = prompt('Sheet name:', sheets[idx].name);
+  if (name && name.trim()) { sheets[idx].name = name.trim(); renderSheetTabs(); }
+}
+
+function deleteSheet(idx, e) {
+  e.stopPropagation();
+  if (sheets.length <= 1) { toast('Cannot delete last sheet'); return; }
+  if (!confirm('Delete sheet "' + sheets[idx].name + '"?')) return;
+  sheets.splice(idx, 1);
+  if (activeSheetIdx >= sheets.length) activeSheetIdx = sheets.length - 1;
+  if (sheets[activeSheetIdx].data) { restoreSnapshot(sheets[activeSheetIdx].data); applyCanvasBg(); }
+  render(); renderSheetTabs();
+}
+
+function renderSheetTabs() {
+  const container = document.getElementById('sheetTabs');
+  // Remove existing sheet tabs (keep add button and status elements)
+  container.querySelectorAll('.sheet-tab').forEach(el => el.remove());
+  const addBtn = container.querySelector('.sheet-add-btn');
+  sheets.forEach((s, i) => {
+    const tab = document.createElement('div');
+    tab.className = 'sheet-tab' + (i === activeSheetIdx ? ' active' : '');
+    tab.onclick = () => switchSheet(i);
+    tab.ondblclick = (e) => { e.stopPropagation(); renameSheet(i); };
+    tab.textContent = s.name;
+    if (sheets.length > 1) {
+      const close = document.createElement('span');
+      close.className = 'sheet-close';
+      close.textContent = '×';
+      close.onclick = (e) => deleteSheet(i, e);
+      tab.appendChild(close);
+    }
+    container.insertBefore(tab, addBtn);
+  });
+  const z2 = document.getElementById('zoomLabel2');
+  if (z2) z2.textContent = Math.round(scale * 100) + '%';
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  DRAG & DROP
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let dragState = null;
 function onNodeMouseDown(e, id) {
   if (e.button !== 0) return; e.stopPropagation();
+  if (linkMode) { finishLinkToNode(id); return; }
   if (relMode) { finishRelationship(id); return; }
-  selectNode(id);
+  selectNode(id, e.ctrlKey || e.metaKey);
   const sx = e.clientX, sy = e.clientY; let dragging = false, ghost = null;
   const onMove = ev => {
     const dx = ev.clientX - sx, dy = ev.clientY - sy;
@@ -1059,7 +1702,17 @@ function clearDropHL() { document.querySelectorAll('.mm-node.drag-over,.mm-node.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  NODE OPERATIONS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function selectNode(id) { selectedId = id; closeMenus(); render(); }
+function selectNode(id, ctrlKey) {
+  if (ctrlKey) {
+    if (multiSelected.has(id)) { multiSelected.delete(id); if (selectedId === id) selectedId = multiSelected.size ? [...multiSelected][0] : null; }
+    else { multiSelected.add(id); selectedId = id; }
+  } else {
+    multiSelected.clear();
+    multiSelected.add(id);
+    selectedId = id;
+  }
+  closeMenus(); render();
+}
 function addChild() {
   const pid = selectedId || root?.id; if (!pid || !NM[pid]) return; pushUndo();
   NM[pid].collapsed = false;
@@ -1076,17 +1729,25 @@ function addSibling() {
   selectedId = s.id; render(); editSelected();
 }
 function deleteSelected() {
-  if (!selectedId || selectedId === root?.id) return; pushUndo();
-  const n = NM[selectedId], par = NM[n.parentId];
-  if (par) par.children = par.children.filter(c => c !== selectedId);
-  // Remove from floating topics if it's one
-  floatingTopics = floatingTopics.filter(f => f !== selectedId);
-  const toDelete = [selectedId, ...descendants(selectedId)];
-  toDelete.forEach(id => { deleteRelationshipsFor(id); floatingTopics = floatingTopics.filter(f => f !== id); delete NM[id]; });
-  // Clean up boundaries and summaries
+  // Multi-delete
+  const ids = multiSelected.size > 1 ? [...multiSelected] : (selectedId ? [selectedId] : []);
+  if (!ids.length) return;
+  const filtered = ids.filter(id => id !== root?.id);
+  if (!filtered.length) return;
+  pushUndo();
+  let newSel = null;
+  filtered.forEach(id => {
+    const n = NM[id]; if (!n) return;
+    const par = NM[n.parentId]; if (par) par.children = par.children.filter(c => c !== id);
+    floatingTopics = floatingTopics.filter(f => f !== id);
+    const toDelete = [id, ...descendants(id)];
+    toDelete.forEach(did => { deleteRelationshipsFor(did); floatingTopics = floatingTopics.filter(f => f !== did); delete NM[did]; });
+    if (!newSel && n.parentId) newSel = n.parentId;
+  });
   boundaries = boundaries.filter(b => { b.nodeIds = b.nodeIds.filter(id => NM[id]); return b.nodeIds.length > 0; });
   summaries = summaries.filter(s => { s.nodeIds = s.nodeIds.filter(id => NM[id]); return s.nodeIds.length > 0; });
-  selectedId = n.parentId || root?.id; closeMenus(); render();
+  multiSelected.clear();
+  selectedId = newSel || root?.id; closeMenus(); render();
 }
 function editSelected() {
   if (!selectedId || !nodeEls[selectedId]) return;
@@ -1116,7 +1777,7 @@ window.addEventListener('mouseup', () => { isPanning = false; document.body.clas
 viewport.addEventListener('wheel', e => { e.preventDefault(); const mx = e.clientX, my = e.clientY - 44; const old = scale; scale = Math.max(0.12, Math.min(4, scale * (e.deltaY > 0 ? 0.93 : 1.07))); panX = mx - (mx - panX) * (scale / old); panY = my - (my - panY) * (scale / old); updateZoom(); applyTransform(); }, { passive: false });
 function zoomIn() { zoomBy(1.25); } function zoomOut() { zoomBy(0.8); }
 function zoomBy(f) { const cx = viewport.clientWidth/2, cy = viewport.clientHeight/2; const old = scale; scale = Math.max(0.12, Math.min(4, scale*f)); panX = cx - (cx-panX)*(scale/old); panY = cy - (cy-panY)*(scale/old); updateZoom(); applyTransform(); }
-function updateZoom() { document.getElementById('zoomLabel').textContent = Math.round(scale*100)+'%'; }
+function updateZoom() { document.getElementById('zoomLabel').textContent = Math.round(scale*100)+'%'; const z2 = document.getElementById('zoomLabel2'); if (z2) z2.textContent = Math.round(scale*100)+'%'; }
 function fitAll() {
   if (!root) return; let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
   Object.values(NM).forEach(n => { const w = estW(n.text, depth(n.id)); x0 = Math.min(x0, n.x-w/2-20); x1 = Math.max(x1, n.x+w/2+30); y0 = Math.min(y0, n.y-30); y1 = Math.max(y1, n.y+30); });
@@ -1156,14 +1817,13 @@ function navSib(dir) { const n = NM[selectedId]; if (!n?.parentId) return; const
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let openPanelId = null;
 function togglePanel(which) {
-  const panels = { notes: 'notesPanel', themes: 'themePanel' };
-  const btns = { notes: 'btnNotes', themes: 'btnThemes' };
+  const panels = { notes: 'notesPanel', themes: 'themePanel', format: 'fmtPanel' };
+  const btns = { notes: 'btnNotes', themes: 'btnThemes', format: 'btnFormat' };
   if (openPanelId === which) {
     document.getElementById(panels[which]).classList.remove('open');
     document.getElementById(btns[which]).classList.remove('active');
     openPanelId = null;
   } else {
-    // Close any open panel
     for (const [k, v] of Object.entries(panels)) {
       document.getElementById(v).classList.remove('open');
       document.getElementById(btns[k]).classList.remove('active');
@@ -1173,6 +1833,7 @@ function togglePanel(which) {
     openPanelId = which;
     if (which === 'notes') syncNotesPanel();
     if (which === 'themes') renderThemePanel();
+    if (which === 'format') syncFormatPanel();
   }
 }
 
@@ -1224,12 +1885,12 @@ function toggleTheme() { isDark = !isDark; document.body.classList.toggle('theme
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  SAVE / LOAD / EXPORT
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function serializeTree(id) { const n = NM[id]; return { text: n.text, color: n.color, collapsed: n.collapsed, note: n.note||'', link: n.link||'', side: n.side, markers: n.markers||[], children: n.children.map(c => serializeTree(c)) }; }
-function deserializeTree(obj, parentId = null) { const n = mk(obj.text, parentId); n.color = obj.color||null; n.collapsed = obj.collapsed||false; n.note = obj.note||''; n.link = obj.link||''; n.side = obj.side||null; n.markers = obj.markers||[]; NM[n.id] = n; (obj.children||[]).forEach(co => { const c = deserializeTree(co, n.id); n.children.push(c.id); }); return n; }
+function serializeTree(id) { const n = NM[id]; const o = { text: n.text, color: n.color, collapsed: n.collapsed, note: n.note||'', link: n.link||'', side: n.side, markers: n.markers||[], children: n.children.map(c => serializeTree(c)) }; ['shape','bgColor','borderStyle','borderColor','borderWidth','fontFamily','fontSize','fontWeight','fontColor','textAlign','connStyle','connWidth','connColor','linkedNodeId'].forEach(p => { if (n[p]) o[p] = n[p]; }); ['italic','strikethrough','underline'].forEach(p => { if (n[p]) o[p] = true; }); if (n.image) { o.image = n.image; o.imageWidth = n.imageWidth; } return o; }
+function deserializeTree(obj, parentId = null) { const n = mk(obj.text, parentId); n.color = obj.color||null; n.collapsed = obj.collapsed||false; n.note = obj.note||''; n.link = obj.link||''; n.side = obj.side||null; n.markers = obj.markers||[]; ['shape','bgColor','borderStyle','borderColor','borderWidth','fontFamily','fontSize','fontWeight','fontColor','textAlign','connStyle','connWidth','connColor','linkedNodeId'].forEach(p => { if (obj[p]) n[p] = obj[p]; }); ['italic','strikethrough','underline'].forEach(p => { n[p] = !!obj[p]; }); if (obj.image) { n.image = obj.image; n.imageWidth = obj.imageWidth || 120; } NM[n.id] = n; (obj.children||[]).forEach(co => { const c = deserializeTree(co, n.id); n.children.push(c.id); }); return n; }
 function exportJSON() {
   if (!root) return;
   const floats = floatingTopics.map(fid => NM[fid] ? { ...serializeTree(fid), floatX: NM[fid].floatX, floatY: NM[fid].floatY } : null).filter(Boolean);
-  dl(JSON.stringify({ theme: activeThemeId, canvasBg, rainbow: rainbowBranches, tree: serializeTree(root.id), relationships, boundaries, summaries, floatingTopics: floats }, null, 2), `mindmap_${Date.now()}.json`, 'application/json'); toast('Saved');
+  dl(JSON.stringify({ theme: activeThemeId, canvasBg, rainbow: rainbowBranches, layout: mapLayout, tree: serializeTree(root.id), relationships, boundaries, summaries, floatingTopics: floats }, null, 2), `mindmap_${Date.now()}.json`, 'application/json'); toast('Saved');
 }
 function importJSON() { document.getElementById('fileInput').click(); }
 function handleImport(e) {
@@ -1245,6 +1906,7 @@ function handleImport(e) {
       if (obj.theme) activeThemeId = obj.theme;
       if (obj.canvasBg !== undefined) { canvasBg = obj.canvasBg; applyCanvasBg(); }
       if (obj.rainbow !== undefined) rainbowBranches = obj.rainbow;
+      if (obj.layout) { mapLayout = obj.layout; const ls = document.getElementById('layoutSelect'); if (ls) ls.value = mapLayout; }
       relationships = obj.relationships || []; boundaries = obj.boundaries || []; summaries = obj.summaries || [];
       // Restore floating topics
       floatingTopics = [];
