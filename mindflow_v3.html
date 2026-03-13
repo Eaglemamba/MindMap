@@ -70,6 +70,8 @@
   .mm-node:hover { box-shadow: 0 2px 14px var(--shadow); }
   .mm-node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--selected-ring); z-index: 5; }
   .mm-node.drag-over { border-color: var(--success) !important; box-shadow: 0 0 0 3px rgba(93,170,93,0.4) !important; }
+  .mm-node.drop-above { border-top: 3px solid var(--accent) !important; }
+  .mm-node.drop-below { border-bottom: 3px solid var(--accent) !important; }
   .mm-node.lvl-0 { background: var(--root-bg); color: var(--root-text); padding: 12px 24px; border-radius: 14px; font-size: 15px; font-weight: 700; box-shadow: 0 4px 24px rgba(217,119,87,0.18); }
   .mm-node.lvl-0.selected { border-color: #fff; box-shadow: 0 4px 24px rgba(217,119,87,0.25), 0 0 0 3px rgba(255,255,255,0.25); }
   .mm-node.lvl-1 { background: var(--surface); border-color: var(--border); padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 10px; }
@@ -761,7 +763,12 @@ function onFloatingMouseDown(e, id) {
       } else if (ghost) {
         ghost.style.left = (ev.clientX + 12) + 'px'; ghost.style.top = (ev.clientY - 14) + 'px';
         clearDropHL(); const tgt = findDropTarget(ev.clientX, ev.clientY, id);
-        if (tgt && nodeEls[tgt]) nodeEls[tgt].classList.add('drag-over');
+        if (tgt && nodeEls[tgt]) {
+          const zone = getDropZone(ev.clientX, ev.clientY, tgt);
+          if (zone === 'above') nodeEls[tgt].classList.add('drop-above');
+          else if (zone === 'below') nodeEls[tgt].classList.add('drop-below');
+          else nodeEls[tgt].classList.add('drag-over');
+        }
       }
     }
   };
@@ -771,28 +778,55 @@ function onFloatingMouseDown(e, id) {
       if (isFloatRoot) {
         const tgt = findDropTarget(ev.clientX, ev.clientY, id);
         if (tgt && tgt !== id && !descendants(id).includes(tgt)) {
-          // Re-attach floating topic to the target node
-          pushUndo();
-          floatingTopics = floatingTopics.filter(f => f !== id);
-          NM[id].floatX = null; NM[id].floatY = null;
-          NM[id].parentId = tgt; NM[tgt].children.push(id); NM[tgt].collapsed = false;
-          if (depth(tgt) === 0) NM[id].side = NM[tgt].children.indexOf(id) % 2 === 0 ? 'right' : 'left';
-          else NM[id].side = null;
-          render(); toast('Re-attached to tree');
+          const zone = getDropZone(ev.clientX, ev.clientY, tgt);
+          const tgtNode = NM[tgt];
+          if ((zone === 'above' || zone === 'below') && tgtNode.parentId != null) {
+            // Reorder: insert floating topic before/after target
+            pushUndo();
+            floatingTopics = floatingTopics.filter(f => f !== id);
+            NM[id].floatX = null; NM[id].floatY = null;
+            const newPar = NM[tgtNode.parentId];
+            NM[id].parentId = tgtNode.parentId; NM[id].side = tgtNode.side;
+            const insertIdx = zone === 'above' ? newPar.children.indexOf(tgt) : newPar.children.indexOf(tgt) + 1;
+            newPar.children.splice(insertIdx, 0, id);
+            render(); toast('Re-attached & reordered');
+          } else {
+            // Reparent onto target
+            pushUndo();
+            floatingTopics = floatingTopics.filter(f => f !== id);
+            NM[id].floatX = null; NM[id].floatY = null;
+            NM[id].parentId = tgt; NM[tgt].children.push(id); NM[tgt].collapsed = false;
+            if (depth(tgt) === 0) NM[id].side = NM[tgt].children.indexOf(id) % 2 === 0 ? 'right' : 'left';
+            else NM[id].side = null;
+            render(); toast('Re-attached to tree');
+          }
         } else {
           // Just repositioned
           pushUndo(); render();
         }
         clearDropHL();
       } else {
-        // Same logic as main tree drag
+        // Same logic as main tree drag with reorder support
         const tgt = findDropTarget(ev.clientX, ev.clientY, id);
-        if (tgt && tgt !== id && tgt !== NM[id].parentId && !descendants(id).includes(tgt)) {
-          pushUndo(); const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
-          floatingTopics = floatingTopics.filter(f => f !== id);
-          NM[id].floatX = null; NM[id].floatY = null;
-          NM[id].parentId = tgt; NM[tgt].children.push(id); NM[tgt].collapsed = false;
-          NM[id].side = null; NM[id].color = null; render(); toast('Node moved');
+        if (tgt && tgt !== id && !descendants(id).includes(tgt)) {
+          const zone = getDropZone(ev.clientX, ev.clientY, tgt);
+          const tgtNode = NM[tgt];
+          if ((zone === 'above' || zone === 'below') && tgtNode.parentId != null) {
+            pushUndo(); const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
+            floatingTopics = floatingTopics.filter(f => f !== id);
+            NM[id].floatX = null; NM[id].floatY = null;
+            const newPar = NM[tgtNode.parentId];
+            NM[id].parentId = tgtNode.parentId; NM[id].side = tgtNode.side;
+            const insertIdx = zone === 'above' ? newPar.children.indexOf(tgt) : newPar.children.indexOf(tgt) + 1;
+            newPar.children.splice(insertIdx, 0, id);
+            render(); toast('Reordered');
+          } else if (zone === 'onto' && tgt !== NM[id].parentId) {
+            pushUndo(); const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
+            floatingTopics = floatingTopics.filter(f => f !== id);
+            NM[id].floatX = null; NM[id].floatY = null;
+            NM[id].parentId = tgt; NM[tgt].children.push(id); NM[tgt].collapsed = false;
+            NM[id].side = null; NM[id].color = null; render(); toast('Node moved');
+          }
         } else if (!tgt && NM[id].parentId !== null) {
           // Detach as floating topic from within floating subtree
           pushUndo();
@@ -945,23 +979,46 @@ function onNodeMouseDown(e, id) {
     if (dragging && ghost) {
       ghost.style.left = (ev.clientX + 12) + 'px'; ghost.style.top = (ev.clientY - 14) + 'px';
       clearDropHL(); const tgt = findDropTarget(ev.clientX, ev.clientY, id);
-      if (tgt && nodeEls[tgt]) nodeEls[tgt].classList.add('drag-over');
+      if (tgt && nodeEls[tgt]) {
+        const zone = getDropZone(ev.clientX, ev.clientY, tgt);
+        if (zone === 'above') nodeEls[tgt].classList.add('drop-above');
+        else if (zone === 'below') nodeEls[tgt].classList.add('drop-below');
+        else nodeEls[tgt].classList.add('drag-over');
+      }
     }
   };
   const onUp = ev => {
     if (dragging) {
       const tgt = findDropTarget(ev.clientX, ev.clientY, id);
-      if (tgt && tgt !== id && tgt !== NM[id].parentId && !descendants(id).includes(tgt)) {
-        // Drop onto another node — reparent
-        pushUndo();
-        const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
-        // If it was a floating topic, remove from floats
-        floatingTopics = floatingTopics.filter(f => f !== id);
-        NM[id].floatX = null; NM[id].floatY = null;
-        NM[id].parentId = tgt; NM[tgt].children.push(id); NM[tgt].collapsed = false;
-        if (depth(tgt) === 0) NM[id].side = NM[tgt].children.indexOf(id) % 2 === 0 ? 'right' : 'left';
-        else NM[id].side = null;
-        NM[id].color = null; render(); toast('Node moved');
+      if (tgt && tgt !== id && !descendants(id).includes(tgt)) {
+        const zone = getDropZone(ev.clientX, ev.clientY, tgt);
+        const tgtNode = NM[tgt];
+        if ((zone === 'above' || zone === 'below') && tgtNode.parentId != null) {
+          // Reorder: insert before/after target within its parent
+          pushUndo();
+          const oldPar = NM[NM[id].parentId]; if (oldPar) oldPar.children = oldPar.children.filter(c => c !== id);
+          floatingTopics = floatingTopics.filter(f => f !== id);
+          NM[id].floatX = null; NM[id].floatY = null;
+          const newPar = NM[tgtNode.parentId];
+          NM[id].parentId = tgtNode.parentId;
+          // Inherit side from target sibling
+          NM[id].side = tgtNode.side;
+          const tgtIdx = newPar.children.indexOf(tgt);
+          const insertIdx = zone === 'above' ? tgtIdx : tgtIdx + 1;
+          newPar.children.splice(insertIdx, 0, id);
+          if (depth(tgtNode.parentId) === 0 && !NM[id].color) NM[id].color = null;
+          render(); toast('Reordered');
+        } else if (zone === 'onto' && tgt !== NM[id].parentId) {
+          // Reparent: drop onto center of node
+          pushUndo();
+          const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
+          floatingTopics = floatingTopics.filter(f => f !== id);
+          NM[id].floatX = null; NM[id].floatY = null;
+          NM[id].parentId = tgt; NM[tgt].children.push(id); NM[tgt].collapsed = false;
+          if (depth(tgt) === 0) NM[id].side = NM[tgt].children.indexOf(id) % 2 === 0 ? 'right' : 'left';
+          else NM[id].side = null;
+          NM[id].color = null; render(); toast('Node moved');
+        }
       } else if (!tgt && NM[id].parentId !== null) {
         // Drop onto empty canvas — detach as floating topic
         pushUndo();
@@ -988,7 +1045,16 @@ function findDropTarget(cx, cy, dragId) {
   for (const [id, n] of Object.entries(NM)) { if (+id === dragId || desc.includes(+id)) continue; const d = Math.hypot(wx - n.x, wy - n.y); if (d < bd) { bd = d; best = +id; } }
   return best;
 }
-function clearDropHL() { document.querySelectorAll('.mm-node.drag-over').forEach(el => el.classList.remove('drag-over')); }
+// Determine drop zone: 'above', 'below', or 'onto' (reparent)
+function getDropZone(cx, cy, targetId) {
+  const el = nodeEls[targetId]; if (!el) return 'onto';
+  const r = el.getBoundingClientRect();
+  const relY = cy - r.top; const h = r.height;
+  if (relY < h * 0.28) return 'above';
+  if (relY > h * 0.72) return 'below';
+  return 'onto';
+}
+function clearDropHL() { document.querySelectorAll('.mm-node.drag-over,.mm-node.drop-above,.mm-node.drop-below').forEach(el => { el.classList.remove('drag-over','drop-above','drop-below'); }); }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  NODE OPERATIONS
