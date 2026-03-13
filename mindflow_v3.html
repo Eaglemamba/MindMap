@@ -754,6 +754,10 @@ function onFloatingMouseDown(e, id) {
         NM[id].floatX = (ev.clientX - panX) / scale;
         NM[id].floatY = (ev.clientY - 44 - panY) / scale;
         render();
+        // Highlight potential drop target when near a node
+        clearDropHL();
+        const tgt = findDropTarget(ev.clientX, ev.clientY, id);
+        if (tgt && nodeEls[tgt]) nodeEls[tgt].classList.add('drag-over');
       } else if (ghost) {
         ghost.style.left = (ev.clientX + 12) + 'px'; ghost.style.top = (ev.clientY - 14) + 'px';
         clearDropHL(); const tgt = findDropTarget(ev.clientX, ev.clientY, id);
@@ -765,8 +769,21 @@ function onFloatingMouseDown(e, id) {
   const onUp = ev => {
     if (dragging) {
       if (isFloatRoot) {
-        // Position already updated in onMove, just save
-        pushUndo(); render(); toast('Floating topic repositioned');
+        const tgt = findDropTarget(ev.clientX, ev.clientY, id);
+        if (tgt && tgt !== id && !descendants(id).includes(tgt)) {
+          // Re-attach floating topic to the target node
+          pushUndo();
+          floatingTopics = floatingTopics.filter(f => f !== id);
+          NM[id].floatX = null; NM[id].floatY = null;
+          NM[id].parentId = tgt; NM[tgt].children.push(id); NM[tgt].collapsed = false;
+          if (depth(tgt) === 0) NM[id].side = NM[tgt].children.indexOf(id) % 2 === 0 ? 'right' : 'left';
+          else NM[id].side = null;
+          render(); toast('Re-attached to tree');
+        } else {
+          // Just repositioned
+          pushUndo(); render();
+        }
+        clearDropHL();
       } else {
         // Same logic as main tree drag
         const tgt = findDropTarget(ev.clientX, ev.clientY, id);
