@@ -310,6 +310,14 @@
   }
   body.zen-mode .zen-exit { display: block; }
   .zen-exit:hover { background: var(--accent); color: #fff; }
+
+  /* ── Floating Topics ── */
+  .mm-node.floating-root {
+    background: var(--surface); border: 2px dashed var(--accent); border-radius: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 600;
+    box-shadow: 0 4px 20px var(--shadow);
+  }
+  .mm-node.floating-root.selected { border-color: var(--accent); border-style: solid; box-shadow: 0 4px 20px var(--shadow), 0 0 0 3px var(--selected-ring); }
 </style>
 </head>
 <body>
@@ -391,6 +399,7 @@
   <div class="ctx-item" onclick="showNodeColorPicker(event)"><span class="ctx-ic">◉</span> Color</div>
   <div class="ctx-item" onclick="showMarkerPicker(event)"><span class="ctx-ic">⚑</span> Markers</div>
   <div class="ctx-item" onclick="startRelationship()"><span class="ctx-ic">↔</span> Relationship</div>
+  <div class="ctx-item" onclick="detachAsFloating()"><span class="ctx-ic">⊙</span> Detach as Floating Topic</div>
   <div class="ctx-item" onclick="copyNode()"><span class="ctx-ic">⧉</span> Copy <span class="ctx-key">Ctrl+C</span></div>
   <div class="ctx-item" onclick="cutNode()"><span class="ctx-ic">✂</span> Cut <span class="ctx-key">Ctrl+X</span></div>
   <div class="ctx-item" onclick="pasteNode()"><span class="ctx-ic">⎘</span> Paste <span class="ctx-key">Ctrl+V</span></div>
@@ -493,6 +502,7 @@ let boundaries = [];    // {id, nodeIds:[], color, label}
 let summaries = [];     // {id, nodeIds:[], label}
 let relIdCounter = 1, bndIdCounter = 1, sumIdCounter = 1;
 let clipboard = null;   // {tree: serialized subtree, cut: bool, sourceId}
+let floatingTopics = []; // array of root node ids that are free-positioned
 
 // MARKER DEFINITIONS
 const MARKERS = {
@@ -515,7 +525,7 @@ const MARKERS = {
 };
 
 function mk(text, parentId = null) {
-  return { id: nid++, text, parentId, children: [], collapsed: false, color: null, note: '', link: '', x: 0, y: 0, side: null, markers: [] };
+  return { id: nid++, text, parentId, children: [], collapsed: false, color: null, note: '', link: '', x: 0, y: 0, side: null, markers: [], floatX: null, floatY: null };
 }
 
 function getActiveTheme() {
@@ -540,7 +550,7 @@ function initDefault() {
   });
 }
 
-function depth(id) { let d = 0, n = NM[id]; while (n && n.parentId != null) { d++; n = NM[n.parentId]; } return d; }
+function depth(id) { let d = 0, n = NM[id]; while (n && n.parentId != null) { d++; n = NM[n.parentId]; } if (d === 0 && floatingTopics.includes(id)) return 0; return d; }
 function lvl(id) { return Math.min(depth(id), 4); }
 function branchColor(id) { let n = NM[id]; while (n) { if (n.color) return n.color; if (!n.parentId) return getActiveTheme().root; n = NM[n.parentId]; } return '#6a9bcc'; }
 function branchSide(id) { let n = NM[id]; while (n) { if (n.side) return n.side; if (!n.parentId) return 'right'; n = NM[n.parentId]; } return 'right'; }
@@ -551,9 +561,9 @@ function visKids(id) { const n = NM[id]; if (!n || n.collapsed) return []; retur
 //  UNDO / REDO
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let undoStack = [], redoStack = [];
-function snapshot() { return JSON.stringify({ nm: serializeAll(), sel: selectedId, nid, themeId: activeThemeId, canvasBg, rainbow: rainbowBranches, rels: relationships.map(r=>({...r})), bnds: boundaries.map(b=>({...b, nodeIds:[...b.nodeIds]})), sums: summaries.map(s=>({...s, nodeIds:[...s.nodeIds]})), relIdC: relIdCounter, bndIdC: bndIdCounter, sumIdC: sumIdCounter }); }
-function serializeAll() { const o = {}; for (const [k, n] of Object.entries(NM)) o[k] = { id:n.id, text:n.text, parentId:n.parentId, children:[...n.children], collapsed:n.collapsed, color:n.color, note:n.note, link:n.link, side:n.side, markers:[...(n.markers||[])] }; return o; }
-function restoreSnapshot(s) { const d = JSON.parse(s); NM = {}; nid = d.nid; for (const [k, v] of Object.entries(d.nm)) NM[k] = { ...v, x:0, y:0, markers: v.markers||[] }; root = NM[Object.values(NM).find(n=>n.parentId===null)?.id]; selectedId = NM[d.sel]?d.sel:root?.id; if(d.themeId) activeThemeId=d.themeId; if(d.canvasBg!==undefined) canvasBg=d.canvasBg; if(d.rainbow!==undefined) rainbowBranches=d.rainbow; relationships=d.rels||[]; boundaries=d.bnds||[]; summaries=d.sums||[]; relIdCounter=d.relIdC||1; bndIdCounter=d.bndIdC||1; sumIdCounter=d.sumIdC||1; }
+function snapshot() { return JSON.stringify({ nm: serializeAll(), sel: selectedId, nid, themeId: activeThemeId, canvasBg, rainbow: rainbowBranches, rels: relationships.map(r=>({...r})), bnds: boundaries.map(b=>({...b, nodeIds:[...b.nodeIds]})), sums: summaries.map(s=>({...s, nodeIds:[...s.nodeIds]})), relIdC: relIdCounter, bndIdC: bndIdCounter, sumIdC: sumIdCounter, floats: [...floatingTopics] }); }
+function serializeAll() { const o = {}; for (const [k, n] of Object.entries(NM)) o[k] = { id:n.id, text:n.text, parentId:n.parentId, children:[...n.children], collapsed:n.collapsed, color:n.color, note:n.note, link:n.link, side:n.side, markers:[...(n.markers||[])], floatX:n.floatX, floatY:n.floatY }; return o; }
+function restoreSnapshot(s) { const d = JSON.parse(s); NM = {}; nid = d.nid; for (const [k, v] of Object.entries(d.nm)) NM[k] = { ...v, x:0, y:0, markers: v.markers||[], floatX: v.floatX||null, floatY: v.floatY||null }; root = NM[Object.values(NM).find(n=>n.parentId===null && !(d.floats||[]).includes(n.id))?.id]; selectedId = NM[d.sel]?d.sel:root?.id; if(d.themeId) activeThemeId=d.themeId; if(d.canvasBg!==undefined) canvasBg=d.canvasBg; if(d.rainbow!==undefined) rainbowBranches=d.rainbow; relationships=d.rels||[]; boundaries=d.bnds||[]; summaries=d.sums||[]; relIdCounter=d.relIdC||1; bndIdCounter=d.bndIdC||1; sumIdCounter=d.sumIdC||1; floatingTopics=d.floats||[]; }
 function pushUndo() { undoStack.push(snapshot()); if (undoStack.length > 60) undoStack.shift(); redoStack = []; updateUndoStatus(); }
 function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); restoreSnapshot(undoStack.pop()); applyCanvasBg(); render(); updateUndoStatus(); toast('Undo'); }
 function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restoreSnapshot(redoStack.pop()); applyCanvasBg(); render(); updateUndoStatus(); toast('Redo'); }
@@ -594,9 +604,14 @@ let scale = 0.75, panX = 0, panY = 0, nodeEls = {};
 function estW(text, d) { const fs = FONT_SIZES[Math.min(d, 4)]; return Math.max(55, text.length * fs * 0.56 + PADDINGS[Math.min(d, 4)]); }
 
 function render() {
-  doLayout(); world.innerHTML = ''; svg.innerHTML = ''; nodeEls = {};
+  doLayout(); layoutFloatingTopics(); world.innerHTML = ''; svg.innerHTML = ''; nodeEls = {};
   if (!root) return;
-  drawBoundaries(); drawEdges(root.id); drawRelationships(); drawSummaries(); drawNodes(root.id);
+  drawBoundaries(); drawEdges(root.id);
+  // Draw floating topic trees
+  floatingTopics.forEach(fid => { if (NM[fid]) { drawEdges(fid); } });
+  drawRelationships(); drawSummaries(); drawNodes(root.id);
+  // Draw floating topic nodes
+  floatingTopics.forEach(fid => { if (NM[fid]) drawFloatingNodes(fid); });
   applyTransform(); updateStatus(); syncNotesPanel(); renderThemePanel(); renderOutliner();
 }
 
@@ -652,6 +667,149 @@ function drawNodes(id) {
 }
 
 function applyTransform() { const t = `translate(${panX}px,${panY}px) scale(${scale})`; world.style.transform = t; svg.style.transform = t; svg.style.transformOrigin = '0 0'; }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  FLOATING TOPICS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function layoutFloatingTopics() {
+  floatingTopics.forEach(fid => {
+    const fn = NM[fid]; if (!fn) return;
+    // Position the floating root at its saved float coordinates
+    fn.x = fn.floatX || ORIGIN_X + 500;
+    fn.y = fn.floatY || ORIGIN_Y;
+    // Layout children as a rightward tree from the floating root
+    const kids = visKids(fid);
+    if (!kids.length) return;
+    const gap = H_GAPS[1] || 220;
+    const totalH = kids.reduce((s, c, i) => s + subtreeH(c) + (i > 0 ? V_GAP : 0), 0);
+    let y = fn.y - totalH / 2;
+    kids.forEach(c => { const sh = subtreeH(c); layoutBranch(c, fn.x + gap, y + sh / 2, 'right'); y += sh + V_GAP; });
+  });
+}
+
+function floatingDepth(id) {
+  // Depth relative to the floating root
+  let d = 0, n = NM[id];
+  while (n && n.parentId != null) { d++; n = NM[n.parentId]; }
+  return d;
+}
+
+function drawFloatingNodes(id) {
+  const n = NM[id]; const isFloatRoot = floatingTopics.includes(id);
+  const d = isFloatRoot ? 0 : depth(id);
+  const l = Math.min(d, 4);
+  // For float roots, use level 1 styling but with dashed border
+  const displayLvl = isFloatRoot ? 1 : l;
+  const w = estW(n.text, d); const h = NODE_H[displayLvl];
+  const el = document.createElement('div');
+  el.className = `mm-node lvl-${displayLvl}`;
+  if (isFloatRoot) el.classList.add('floating-root');
+  if (id === selectedId) el.classList.add('selected');
+  if (n.collapsed && n.children.length) el.classList.add('collapsed');
+  if (isFloatRoot && n.color) { el.style.borderColor = n.color; el.style.borderLeftWidth = '3px'; el.style.borderLeftStyle = 'solid'; }
+  else if (!isFloatRoot && d >= 1 && d <= 2) { const c = branchColor(id); el.style.borderLeftColor = c; el.style.borderLeftWidth = '3px'; el.style.borderLeftStyle = 'solid'; }
+
+  const txt = document.createElement('span'); txt.className = 'node-text'; txt.textContent = n.text; el.appendChild(txt);
+  if (n.markers && n.markers.length) {
+    const mc = document.createElement('span'); mc.className = 'node-markers';
+    n.markers.forEach(mid => { for (const cat of Object.values(MARKERS)) { const found = cat.items.find(i => i.id === mid); if (found) { const sp = document.createElement('span'); sp.className = 'node-marker'; sp.textContent = found.icon; sp.title = found.label; mc.appendChild(sp); } } });
+    el.appendChild(mc);
+  }
+  if (n.note || n.link) { const dot = document.createElement('div'); dot.className = 'note-dot'; el.appendChild(dot); }
+  if (n.children.length) {
+    const dot = document.createElement('div'); dot.className = 'collapse-dot';
+    dot.textContent = n.collapsed ? n.children.length : '−';
+    dot.addEventListener('click', e => { e.stopPropagation(); pushUndo(); n.collapsed = !n.collapsed; render(); });
+    el.appendChild(dot);
+  }
+  el.style.left = (n.x - w/2) + 'px'; el.style.top = (n.y - h/2) + 'px'; el.style.width = w + 'px'; el.style.height = h + 'px';
+  el.addEventListener('mousedown', e => onFloatingMouseDown(e, id));
+  el.addEventListener('dblclick', e => { e.stopPropagation(); selectNode(id); editSelected(); });
+  el.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); selectNode(id); showCtxMenu(e.clientX, e.clientY); });
+  world.appendChild(el); nodeEls[id] = el;
+  visKids(id).forEach(c => drawFloatingNodes(c));
+}
+
+function onFloatingMouseDown(e, id) {
+  if (e.button !== 0) return; e.stopPropagation();
+  if (relMode) { finishRelationship(id); return; }
+  selectNode(id);
+  const isFloatRoot = floatingTopics.includes(id);
+  const sx = e.clientX, sy = e.clientY; let dragging = false, ghost = null;
+
+  const onMove = ev => {
+    const dx = ev.clientX - sx, dy = ev.clientY - sy;
+    if (!dragging && Math.abs(dx) + Math.abs(dy) > 6) {
+      dragging = true;
+      if (isFloatRoot) {
+        // Drag the floating root to reposition it
+      } else {
+        ghost = document.createElement('div'); ghost.className = 'drag-ghost';
+        ghost.textContent = NM[id].text; document.body.appendChild(ghost); dragState = { id, ghost };
+      }
+    }
+    if (dragging) {
+      if (isFloatRoot) {
+        // Move the floating topic in real-time
+        NM[id].floatX = (ev.clientX - panX) / scale;
+        NM[id].floatY = (ev.clientY - 44 - panY) / scale;
+        render();
+      } else if (ghost) {
+        ghost.style.left = (ev.clientX + 12) + 'px'; ghost.style.top = (ev.clientY - 14) + 'px';
+        clearDropHL(); const tgt = findDropTarget(ev.clientX, ev.clientY, id);
+        if (tgt && nodeEls[tgt]) nodeEls[tgt].classList.add('drag-over');
+      }
+    }
+  };
+
+  const onUp = ev => {
+    if (dragging) {
+      if (isFloatRoot) {
+        // Position already updated in onMove, just save
+        pushUndo(); render(); toast('Floating topic repositioned');
+      } else {
+        // Same logic as main tree drag
+        const tgt = findDropTarget(ev.clientX, ev.clientY, id);
+        if (tgt && tgt !== id && tgt !== NM[id].parentId && !descendants(id).includes(tgt)) {
+          pushUndo(); const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
+          floatingTopics = floatingTopics.filter(f => f !== id);
+          NM[id].floatX = null; NM[id].floatY = null;
+          NM[id].parentId = tgt; NM[tgt].children.push(id); NM[tgt].collapsed = false;
+          NM[id].side = null; NM[id].color = null; render(); toast('Node moved');
+        } else if (!tgt && NM[id].parentId !== null) {
+          // Detach as floating topic from within floating subtree
+          pushUndo();
+          const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
+          NM[id].parentId = null; NM[id].side = null;
+          NM[id].floatX = (ev.clientX - panX) / scale;
+          NM[id].floatY = (ev.clientY - 44 - panY) / scale;
+          if (!NM[id].color) NM[id].color = getActiveTheme().branches[floatingTopics.length % getActiveTheme().branches.length];
+          floatingTopics.push(id);
+          render(); toast('Floating topic created');
+        }
+        clearDropHL(); if (ghost) ghost.remove(); dragState = null;
+      }
+    }
+    cleanup();
+  };
+
+  const cleanup = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+}
+
+function detachAsFloating() {
+  if (!selectedId || selectedId === root?.id) { toast('Cannot detach the main root'); return; }
+  if (floatingTopics.includes(selectedId)) { toast('Already a floating topic'); return; }
+  pushUndo(); closeMenus();
+  const n = NM[selectedId], par = NM[n.parentId];
+  if (par) par.children = par.children.filter(c => c !== selectedId);
+  n.parentId = null; n.side = null;
+  // Place it offset from its current position
+  n.floatX = n.x + 200; n.floatY = n.y;
+  if (!n.color) n.color = getActiveTheme().branches[floatingTopics.length % getActiveTheme().branches.length];
+  floatingTopics.push(selectedId);
+  render(); toast('Detached as floating topic');
+}
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  THEME PANEL LOGIC
@@ -777,11 +935,28 @@ function onNodeMouseDown(e, id) {
     if (dragging) {
       const tgt = findDropTarget(ev.clientX, ev.clientY, id);
       if (tgt && tgt !== id && tgt !== NM[id].parentId && !descendants(id).includes(tgt)) {
-        pushUndo(); const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
+        // Drop onto another node — reparent
+        pushUndo();
+        const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
+        // If it was a floating topic, remove from floats
+        floatingTopics = floatingTopics.filter(f => f !== id);
+        NM[id].floatX = null; NM[id].floatY = null;
         NM[id].parentId = tgt; NM[tgt].children.push(id); NM[tgt].collapsed = false;
         if (depth(tgt) === 0) NM[id].side = NM[tgt].children.indexOf(id) % 2 === 0 ? 'right' : 'left';
         else NM[id].side = null;
         NM[id].color = null; render(); toast('Node moved');
+      } else if (!tgt && NM[id].parentId !== null) {
+        // Drop onto empty canvas — detach as floating topic
+        pushUndo();
+        const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
+        NM[id].parentId = null; NM[id].side = null;
+        // Calculate world position from mouse
+        const wx = (ev.clientX - panX) / scale;
+        const wy = (ev.clientY - 44 - panY) / scale;
+        NM[id].floatX = wx; NM[id].floatY = wy;
+        if (!NM[id].color) NM[id].color = getActiveTheme().branches[floatingTopics.length % getActiveTheme().branches.length];
+        floatingTopics.push(id);
+        render(); toast('Floating topic created');
       }
       clearDropHL(); if (ghost) ghost.remove(); dragState = null;
     }
@@ -821,12 +996,14 @@ function deleteSelected() {
   if (!selectedId || selectedId === root?.id) return; pushUndo();
   const n = NM[selectedId], par = NM[n.parentId];
   if (par) par.children = par.children.filter(c => c !== selectedId);
+  // Remove from floating topics if it's one
+  floatingTopics = floatingTopics.filter(f => f !== selectedId);
   const toDelete = [selectedId, ...descendants(selectedId)];
-  toDelete.forEach(id => { deleteRelationshipsFor(id); delete NM[id]; });
+  toDelete.forEach(id => { deleteRelationshipsFor(id); floatingTopics = floatingTopics.filter(f => f !== id); delete NM[id]; });
   // Clean up boundaries and summaries
   boundaries = boundaries.filter(b => { b.nodeIds = b.nodeIds.filter(id => NM[id]); return b.nodeIds.length > 0; });
   summaries = summaries.filter(s => { s.nodeIds = s.nodeIds.filter(id => NM[id]); return s.nodeIds.length > 0; });
-  selectedId = n.parentId; closeMenus(); render();
+  selectedId = n.parentId || root?.id; closeMenus(); render();
 }
 function editSelected() {
   if (!selectedId || !nodeEls[selectedId]) return;
@@ -966,7 +1143,11 @@ function toggleTheme() { isDark = !isDark; document.body.classList.toggle('theme
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function serializeTree(id) { const n = NM[id]; return { text: n.text, color: n.color, collapsed: n.collapsed, note: n.note||'', link: n.link||'', side: n.side, markers: n.markers||[], children: n.children.map(c => serializeTree(c)) }; }
 function deserializeTree(obj, parentId = null) { const n = mk(obj.text, parentId); n.color = obj.color||null; n.collapsed = obj.collapsed||false; n.note = obj.note||''; n.link = obj.link||''; n.side = obj.side||null; n.markers = obj.markers||[]; NM[n.id] = n; (obj.children||[]).forEach(co => { const c = deserializeTree(co, n.id); n.children.push(c.id); }); return n; }
-function exportJSON() { if (!root) return; dl(JSON.stringify({ theme: activeThemeId, canvasBg, rainbow: rainbowBranches, tree: serializeTree(root.id), relationships, boundaries, summaries }, null, 2), `mindmap_${Date.now()}.json`, 'application/json'); toast('Saved'); }
+function exportJSON() {
+  if (!root) return;
+  const floats = floatingTopics.map(fid => NM[fid] ? { ...serializeTree(fid), floatX: NM[fid].floatX, floatY: NM[fid].floatY } : null).filter(Boolean);
+  dl(JSON.stringify({ theme: activeThemeId, canvasBg, rainbow: rainbowBranches, tree: serializeTree(root.id), relationships, boundaries, summaries, floatingTopics: floats }, null, 2), `mindmap_${Date.now()}.json`, 'application/json'); toast('Saved');
+}
 function importJSON() { document.getElementById('fileInput').click(); }
 function handleImport(e) {
   const f = e.target.files[0]; if (!f) return;
@@ -982,6 +1163,17 @@ function handleImport(e) {
       if (obj.canvasBg !== undefined) { canvasBg = obj.canvasBg; applyCanvasBg(); }
       if (obj.rainbow !== undefined) rainbowBranches = obj.rainbow;
       relationships = obj.relationships || []; boundaries = obj.boundaries || []; summaries = obj.summaries || [];
+      // Restore floating topics
+      floatingTopics = [];
+      if (obj.floatingTopics) {
+        obj.floatingTopics.forEach(ft => {
+          const fn = deserializeTree(ft, null);
+          fn.floatX = ft.floatX || ORIGIN_X + 500;
+          fn.floatY = ft.floatY || ORIGIN_Y;
+          NM[fn.id].floatX = fn.floatX; NM[fn.id].floatY = fn.floatY;
+          floatingTopics.push(fn.id);
+        });
+      }
       selectedId = root.id; undoStack = []; redoStack = [];
       render(); setTimeout(fitAll, 80); toast('Loaded');
     } catch { toast('Invalid JSON'); }
@@ -1334,13 +1526,20 @@ function renderOutliner() {
       item.appendChild(m);
     }
     item.addEventListener('click', () => { selectNode(id); renderOutliner();
-      // Pan to node
       if (NM[id]) { panX = viewport.clientWidth/2 - NM[id].x * scale; panY = viewport.clientHeight/2 - NM[id].y * scale; applyTransform(); }
     });
     list.appendChild(item);
     if (!n.collapsed) n.children.forEach(c => walk(c, indent + 1));
   }
   walk(root.id, 0);
+  // Show floating topics
+  if (floatingTopics.length) {
+    const sep = document.createElement('div'); sep.style.cssText = 'height:1px;background:var(--border);margin:8px 4px;';
+    list.appendChild(sep);
+    const label = document.createElement('div'); label.style.cssText = 'font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;padding:4px 8px;';
+    label.textContent = 'Floating Topics'; list.appendChild(label);
+    floatingTopics.forEach(fid => walk(fid, 0));
+  }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

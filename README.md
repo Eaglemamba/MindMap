@@ -22,6 +22,7 @@ A powerful, browser-based mind mapping tool built as a single HTML file. No depe
 - **Summaries** — add concluding brackets to sibling groups
 - **Markers & Icons** — tag nodes with priority levels, task status, flags, and symbols
 - **Outliner View** — toggle a hierarchical list panel for structured navigation
+- **Floating Topics** — drag any node to empty canvas to detach it as an independent free-positioned topic. Drag it back onto another node to re-attach. Right-click → "Detach as Floating Topic" also works.
 - **Zen Mode** — distraction-free fullscreen for focused brainstorming
 
 ### Theming & Styling
