@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MindFlow — Mind Map Editor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #101014; --bg2: #18181e; --surface: #1e1e28; --surface2: #262632;
+    --border: #2e2e3c; --border2: #3a3a4c; --text: #e8e6e1; --text2: #b0aeb5;
+    --muted: #6a6878; --accent: #6a9bcc; --accent2: #5284b3;
+    --root-bg: #d97757; --root-text: #fff;
+    --selected-ring: rgba(106,155,204,0.5); --connector: #3a3a4c;
+    --shadow: rgba(0,0,0,0.4); --danger: #cc5a5a; --success: #5daa5d;
+    --canvas-bg: #101014;
+  }
+  .theme-light {
+    --bg: #f4f3ef; --bg2: #eae8e3; --surface: #ffffff; --surface2: #f0eeeb;
+    --border: #d8d6d0; --border2: #c8c6c0; --text: #1a1a1a; --text2: #555;
+    --muted: #999; --accent: #4a7faa; --accent2: #3a6a95; --root-bg: #d97757;
+    --root-text: #fff; --selected-ring: rgba(74,127,170,0.4); --connector: #c8c6c0;
+    --shadow: rgba(0,0,0,0.08); --danger: #c44; --success: #3a8a3a;
+    --canvas-bg: #f4f3ef;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    background: var(--bg); color: var(--text);
+    overflow: hidden; height: 100vh; width: 100vw; cursor: default; user-select: none;
+  }
+  body.panning-active { cursor: grabbing; }
+
+  /* ── Toolbar ── */
+  .toolbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 200; height: 44px;
+    display: flex; align-items: center; gap: 4px; padding: 0 12px;
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+  }
+  .toolbar .logo { font-weight: 700; font-size: 14px; color: var(--accent); margin-right: 10px; }
+  .toolbar .sep { width: 1px; height: 22px; background: var(--border); margin: 0 3px; }
+  .tb-btn {
+    background: transparent; border: 1px solid transparent;
+    color: var(--text2); border-radius: 5px; padding: 4px 8px;
+    cursor: pointer; font: 500 11px 'DM Sans', sans-serif;
+    display: flex; align-items: center; gap: 4px; transition: all 0.1s; white-space: nowrap;
+  }
+  .tb-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--border); }
+  .tb-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tb-btn.primary:hover { background: var(--accent2); }
+  .tb-btn.active { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+  .tb-btn .ic { font-size: 13px; line-height: 1; }
+  .tb-btn kbd { font: 500 9px 'JetBrains Mono', monospace; background: var(--surface2); padding: 1px 3px; border-radius: 2px; color: var(--muted); }
+  .zoom-display { font: 500 10px 'JetBrains Mono', monospace; color: var(--muted); min-width: 34px; text-align: center; }
+  .spacer { flex: 1; }
+
+  /* ── Viewport ── */
+  #viewport { position: absolute; top: 44px; left: 0; right: 0; bottom: 26px; overflow: hidden; background: var(--canvas-bg); }
+  #world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+  #connectors { position: absolute; top: 0; left: 0; width: 16000px; height: 10000px; pointer-events: none; }
+  #connectors path { fill: none; stroke-width: 1.8; stroke-linecap: round; }
+
+  /* ── Nodes ── */
+  .mm-node {
+    position: absolute; border-radius: 8px; cursor: pointer;
+    transition: box-shadow 0.12s; border: 2px solid transparent;
+    display: flex; align-items: center; min-height: 28px;
+  }
+  .mm-node:hover { box-shadow: 0 2px 14px var(--shadow); }
+  .mm-node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--selected-ring); z-index: 5; }
+  .mm-node.drag-over { border-color: var(--success) !important; box-shadow: 0 0 0 3px rgba(93,170,93,0.4) !important; }
+  .mm-node.lvl-0 { background: var(--root-bg); color: var(--root-text); padding: 12px 24px; border-radius: 14px; font-size: 15px; font-weight: 700; box-shadow: 0 4px 24px rgba(217,119,87,0.18); }
+  .mm-node.lvl-0.selected { border-color: #fff; box-shadow: 0 4px 24px rgba(217,119,87,0.25), 0 0 0 3px rgba(255,255,255,0.25); }
+  .mm-node.lvl-1 { background: var(--surface); border-color: var(--border); padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 10px; }
+  .mm-node.lvl-2 { background: var(--surface2); border-color: var(--border); padding: 6px 12px; font-size: 12px; font-weight: 500; }
+  .mm-node.lvl-3, .mm-node.lvl-4 { background: transparent; border-color: transparent; border-bottom: 1.5px solid var(--border); border-radius: 0; padding: 3px 10px; font-size: 11px; color: var(--text2); }
+  .mm-node.lvl-3.selected, .mm-node.lvl-4.selected { border-color: var(--accent); border-radius: 5px; background: var(--surface2); }
+  .mm-node .node-text { outline: none; min-width: 20px; white-space: nowrap; }
+  .mm-node .node-text[contenteditable="true"] { cursor: text; border-bottom: 1px dashed var(--accent); }
+  .mm-node .note-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 6px; flex-shrink: 0; opacity: 0.7; }
+  .mm-node .collapse-dot {
+    position: absolute; right: -13px; top: 50%; transform: translateY(-50%);
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--surface2); border: 1.5px solid var(--border);
+    font: 600 9px 'DM Sans', sans-serif; color: var(--muted);
+    display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.1s;
+  }
+  .mm-node .collapse-dot:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .mm-node.collapsed .collapse-dot { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .mm-node.side-left .collapse-dot { right: auto; left: -13px; }
+  .mm-node.lvl-0 .collapse-dot { right: -15px; width: 20px; height: 20px; font-size: 11px; }
+  .drag-ghost {
+    position: fixed; z-index: 500; pointer-events: none; opacity: 0.8;
+    background: var(--surface); border: 2px solid var(--accent); border-radius: 8px;
+    padding: 6px 14px; font-size: 12px; font-weight: 500;
+    box-shadow: 0 8px 24px var(--shadow); color: var(--text);
+  }
+
+  /* ── Context Menu ── */
+  .ctx-menu, .export-menu {
+    position: fixed; z-index: 300; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 4px; min-width: 190px; box-shadow: 0 8px 28px var(--shadow); display: none;
+  }
+  .ctx-menu.open, .export-menu.open { display: block; }
+  .ctx-item {
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 6px;
+    font-size: 11px; color: var(--text2); cursor: pointer; transition: all 0.08s;
+  }
+  .ctx-item:hover { background: var(--surface2); color: var(--text); }
+  .ctx-item .ctx-ic { font-size: 13px; width: 16px; text-align: center; }
+  .ctx-item .ctx-key { margin-left: auto; font: 400 9px 'JetBrains Mono', monospace; color: var(--muted); }
+  .ctx-sep { height: 1px; background: var(--border); margin: 3px 8px; }
+  .ctx-item.danger { color: var(--danger); }
+  .ctx-item.danger:hover { background: rgba(204,90,90,0.1); }
+
+  /* ── Right Panel (shared) ── */
+  .right-panel {
+    position: fixed; right: 0; top: 44px; bottom: 26px; width: 280px; z-index: 150;
+    background: var(--bg2); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform 0.2s ease;
+    overflow: hidden;
+  }
+  .right-panel.open { transform: translateX(0); }
+  .rp-header {
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600;
+  }
+  .rp-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+  .rp-close:hover { background: var(--surface2); color: var(--text); }
+  .rp-body { flex: 1; padding: 10px 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .rp-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .rp-input {
+    width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font: 400 12px 'DM Sans', sans-serif; padding: 8px 10px; outline: none; resize: vertical;
+  }
+  .rp-input:focus { border-color: var(--accent); }
+  .rp-link { font-size: 11px; color: var(--accent); text-decoration: none; word-break: break-all; }
+  .rp-link:hover { text-decoration: underline; }
+
+  /* ── Theme Panel ── */
+  .tp-tabs {
+    display: flex; border-bottom: 1px solid var(--border);
+  }
+  .tp-tab {
+    flex: 1; padding: 8px 0; text-align: center; font-size: 11px; font-weight: 600;
+    color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all 0.12s;
+  }
+  .tp-tab:hover { color: var(--text2); }
+  .tp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tp-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 2px 0;
+  }
+  .tp-card {
+    border: 2px solid var(--border); border-radius: 8px; padding: 8px;
+    cursor: pointer; transition: all 0.12s; display: flex; flex-direction: column; gap: 4px;
+  }
+  .tp-card:hover { border-color: var(--accent); background: var(--surface); }
+  .tp-card.active { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 2px var(--selected-ring); }
+  .tp-card-name { font-size: 9px; font-weight: 600; color: var(--text2); text-align: center; }
+  .tp-card-preview {
+    display: flex; gap: 2px; justify-content: center; align-items: center;
+    height: 24px;
+  }
+  .tp-card-root {
+    width: 28px; height: 18px; border-radius: 5px; flex-shrink: 0;
+  }
+  .tp-card-branch {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+
+  .tp-section { margin-top: 6px; }
+  .tp-section-title { font-size: 10px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+
+  /* Background color grid */
+  .bg-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px;
+  }
+  .bg-swatch {
+    width: 100%; aspect-ratio: 1; border-radius: 5px; cursor: pointer;
+    border: 2px solid transparent; transition: all 0.1s;
+  }
+  .bg-swatch:hover { transform: scale(1.1); }
+  .bg-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--selected-ring); }
+
+  /* Branch style options */
+  .tp-option {
+    display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+    border-radius: 6px; cursor: pointer; font-size: 11px; color: var(--text2);
+    transition: all 0.1s;
+  }
+  .tp-option:hover { background: var(--surface); color: var(--text); }
+  .tp-option.active { background: var(--surface); color: var(--accent); }
+  .tp-option input[type="checkbox"] { accent-color: var(--accent); }
+
+  /* Single color node picker */
+  .color-strip {
+    position: fixed; z-index: 300; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 8px; display: none; gap: 4px; box-shadow: 0 6px 20px var(--shadow);
+  }
+  .color-strip.open { display: flex; }
+  .color-swatch { width: 20px; height: 20px; border-radius: 5px; cursor: pointer; border: 2px solid transparent; transition: all 0.1s; }
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+
+  /* ── Status bar ── */
+  .status-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 200; height: 26px;
+    display: flex; align-items: center; gap: 14px; padding: 0 14px;
+    background: var(--bg2); border-top: 1px solid var(--border);
+    font: 400 10px 'DM Sans', sans-serif; color: var(--muted);
+  }
+  .toast {
+    position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 16px; font-size: 11px; color: var(--text2);
+    box-shadow: 0 4px 16px var(--shadow); z-index: 400; opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="logo">MindFlow</span>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="undo()" title="Undo"><span class="ic">↶</span><kbd>Z</kbd></button>
+  <button class="tb-btn" onclick="redo()" title="Redo"><span class="ic">↷</span><kbd>Y</kbd></button>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="addChild()"><span class="ic">+</span> Child <kbd>Tab</kbd></button>
+  <button class="tb-btn" onclick="addSibling()"><span class="ic">↵</span> Sibling <kbd>Ent</kbd></button>
+  <button class="tb-btn" onclick="editSelected()"><span class="ic">✎</span> Edit <kbd>F2</kbd></button>
+  <button class="tb-btn" onclick="deleteSelected()"><span class="ic">×</span> Del</button>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="zoomOut()"><span class="ic">−</span></button>
+  <span class="zoom-display" id="zoomLabel">80%</span>
+  <button class="tb-btn" onclick="zoomIn()"><span class="ic">+</span></button>
+  <button class="tb-btn" onclick="fitAll()">Fit</button>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="toggleCollapseSelected()"><span class="ic">◇</span> Fold</button>
+  <button class="tb-btn" onclick="expandAll()"><span class="ic">⊞</span> All</button>
+  <div class="spacer"></div>
+  <button class="tb-btn" onclick="togglePanel('notes')" id="btnNotes"><span class="ic">≡</span> Notes</button>
+  <button class="tb-btn" onclick="togglePanel('themes')" id="btnThemes"><span class="ic">◉</span> Themes</button>
+  <button class="tb-btn" onclick="toggleTheme()"><span class="ic" id="themeIcon">☀</span></button>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="exportJSON()"><span class="ic">↓</span> Save</button>
+  <button class="tb-btn" onclick="importJSON()"><span class="ic">↑</span> Load</button>
+  <button class="tb-btn primary" onclick="showExportMenu(event)"><span class="ic">⎙</span> Export</button>
+</div>
+
+<div id="viewport">
+  <svg id="connectors"></svg>
+  <div id="world"></div>
+</div>
+
+<!-- ═══ Notes Panel ═══ -->
+<div class="right-panel" id="notesPanel">
+  <div class="rp-header"><span id="npTitle">Node Notes</span><button class="rp-close" onclick="togglePanel('notes')">×</button></div>
+  <div class="rp-body">
+    <div><span class="rp-label">Note</span></div>
+    <textarea class="rp-input" id="npNote" rows="6" placeholder="Add a note..."></textarea>
+    <div><span class="rp-label">Link / URL</span></div>
+    <input class="rp-input" id="npLink" type="text" placeholder="https://...">
+    <a class="rp-link" id="npLinkPreview" href="#" target="_blank" style="display:none"></a>
+  </div>
+</div>
+
+<!-- ═══ Theme Panel ═══ -->
+<div class="right-panel" id="themePanel">
+  <div class="rp-header"><span>Map Theme</span><button class="rp-close" onclick="togglePanel('themes')">×</button></div>
+  <div class="tp-tabs">
+    <div class="tp-tab active" data-tab="simple" onclick="switchThemeTab('simple')">Simple</div>
+    <div class="tp-tab" data-tab="classic" onclick="switchThemeTab('classic')">Classic</div>
+    <div class="tp-tab" data-tab="vivid" onclick="switchThemeTab('vivid')">Vivid</div>
+  </div>
+  <div class="rp-body" id="themeBody">
+    <!-- Populated by JS -->
+  </div>
+</div>
+
+<!-- Context menu -->
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-item" onclick="addChild()"><span class="ctx-ic">+</span> Add Child <span class="ctx-key">Tab</span></div>
+  <div class="ctx-item" onclick="addSibling()"><span class="ctx-ic">↵</span> Add Sibling <span class="ctx-key">Enter</span></div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="editSelected()"><span class="ctx-ic">✎</span> Edit <span class="ctx-key">F2</span></div>
+  <div class="ctx-item" onclick="togglePanel('notes')"><span class="ctx-ic">≡</span> Notes</div>
+  <div class="ctx-item" onclick="toggleCollapseSelected()"><span class="ctx-ic">◇</span> Fold / Unfold <span class="ctx-key">/</span></div>
+  <div class="ctx-item" onclick="showNodeColorPicker(event)"><span class="ctx-ic">◉</span> Color</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" onclick="deleteSelected()"><span class="ctx-ic">×</span> Delete <span class="ctx-key">Del</span></div>
+</div>
+<div class="color-strip" id="colorPicker"></div>
+<div class="export-menu" id="exportMenu">
+  <div class="ctx-item" onclick="doExport('png')"><span class="ctx-ic">⎙</span> PNG Image</div>
+  <div class="ctx-item" onclick="doExport('svg')"><span class="ctx-ic">◇</span> SVG Vector</div>
+  <div class="ctx-item" onclick="doExport('md')"><span class="ctx-ic">≡</span> Markdown</div>
+  <div class="ctx-item" onclick="doExport('json')"><span class="ctx-ic">{ }</span> JSON</div>
+</div>
+
+<div class="status-bar">
+  <span id="statusNodes">0 nodes</span><span>|</span>
+  <span id="statusSelected">None</span><span>|</span>
+  <span id="statusUndo">-</span><span>|</span>
+  <span>Drag to rearrange · Double-click to edit · Scroll to zoom</span>
+</div>
+<div class="toast" id="toast"></div>
+<input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleImport(event)">
+
+<script>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  THEME DEFINITIONS (16 themes across 3 tabs)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const THEMES = {
+  simple: [
+    { id:'s-warm',    name:'Warm',      root:'#d97757', branches:['#c0785c','#b8956a','#a89878','#8a9070','#7a8f80','#6a8e90'] },
+    { id:'s-cool',    name:'Cool',      root:'#5b8db8', branches:['#6a9bcc','#5da09b','#7a8fb5','#6882a0','#5a7a99','#4d6d8e'] },
+    { id:'s-mono',    name:'Mono',      root:'#555555', branches:['#777777','#666666','#888888','#999999','#707070','#606060'] },
+    { id:'s-sage',    name:'Sage',      root:'#788c5d', branches:['#8a9e6e','#7b9468','#6e8858','#5e7a4c','#809470','#6a8060'] },
+    { id:'s-slate',   name:'Slate',     root:'#5a6577', branches:['#6a7588','#7a8595','#5e6e80','#4e5e70','#6e7e90','#586878'] },
+    { id:'s-sand',    name:'Sand',      root:'#b8956a', branches:['#c4a070','#d0ab78','#bfa068','#aa8d5e','#c8a874','#b49060'] },
+  ],
+  classic: [
+    { id:'c-default', name:'Default',   root:'#d97757', branches:['#6a9bcc','#788c5d','#9b7ed8','#5da09b','#c46b8a','#cc9b4a'] },
+    { id:'c-ocean',   name:'Ocean',     root:'#2c6faa', branches:['#3a8cc4','#2e9e9a','#5588bb','#3070a0','#4090b0','#2580a0'] },
+    { id:'c-forest',  name:'Forest',    root:'#4a7c59', branches:['#6a9b5d','#8aaa6e','#5c8e4a','#4a7040','#7ca060','#608850'] },
+    { id:'c-sunset',  name:'Sunset',    root:'#cc5544', branches:['#d97757','#e8a040','#cc7733','#bb5544','#d06848','#c46830'] },
+    { id:'c-berry',   name:'Berry',     root:'#8855aa', branches:['#9b7ed8','#c46b8a','#7a60b0','#a06090','#b070a0','#9060c0'] },
+    { id:'c-earth',   name:'Earth',     root:'#8b6f47', branches:['#a08050','#7a6a3e','#968058','#b09060','#6a5a34','#c0a070'] },
+  ],
+  vivid: [
+    { id:'v-rainbow', name:'Rainbow',   root:'#e54545', branches:['#e87830','#e8c020','#45b045','#3090d0','#7050d0','#c040a0'] },
+    { id:'v-neon',    name:'Neon',      root:'#ff3366', branches:['#ff6633','#ffcc00','#33ff66','#00ccff','#9933ff','#ff33cc'] },
+    { id:'v-candy',   name:'Candy',     root:'#f06292', branches:['#ba68c8','#7986cb','#4fc3f7','#4db6ac','#aed581','#ffd54f'] },
+    { id:'v-retro',   name:'Retro',     root:'#d45d79', branches:['#ea8c55','#f2c85b','#84b082','#5b99c2','#8e6aaf','#c97b84'] },
+  ],
+};
+
+const BG_COLORS = {
+  dark: ['#101014','#141418','#181820','#1a1a24','#161620','#121216','#0e1018','#10121a','#18161a','#141016','#0c0e12','#1c1c24'],
+  light: ['#f4f3ef','#ffffff','#faf8f4','#f0eeea','#eef2f0','#f4f0e8','#f2f0f4','#e8eef4','#f4ece8','#eae8e4','#f0f4ee','#f8f4ee'],
+};
+
+let activeThemeId = 'c-default';
+let activeThemeTab = 'simple';
+let canvasBg = null; // null = use CSS var default
+let rainbowBranches = true;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  CONSTANTS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const ORIGIN_X = 6000, ORIGIN_Y = 4000;
+const H_GAPS = [280, 220, 185, 160, 140];
+const V_GAP = 10;
+const NODE_H = [50, 40, 34, 26, 26];
+const FONT_SIZES = [15, 13, 12, 11, 11];
+const PADDINGS = [48, 32, 24, 20, 20];
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  DATA MODEL
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let nid = 1, NM = {}, root = null, selectedId = null;
+
+function mk(text, parentId = null) {
+  return { id: nid++, text, parentId, children: [], collapsed: false, color: null, note: '', link: '', x: 0, y: 0, side: null };
+}
+
+function getActiveTheme() {
+  for (const tab of Object.values(THEMES)) {
+    const t = tab.find(t => t.id === activeThemeId);
+    if (t) return t;
+  }
+  return THEMES.classic[0];
+}
+
+function initDefault() {
+  NM = {}; nid = 1;
+  root = mk('Central Topic'); NM[root.id] = root;
+  const theme = getActiveTheme();
+  root.color = theme.root;
+  ['Main Idea 1','Main Idea 2','Main Idea 3'].forEach((t, i) => {
+    const c = mk(t, root.id);
+    c.color = theme.branches[i % theme.branches.length];
+    NM[c.id] = c; root.children.push(c.id);
+    const s = mk('Sub-topic', c.id);
+    NM[s.id] = s; c.children.push(s.id);
+  });
+}
+
+function depth(id) { let d = 0, n = NM[id]; while (n && n.parentId != null) { d++; n = NM[n.parentId]; } return d; }
+function lvl(id) { return Math.min(depth(id), 4); }
+function branchColor(id) { let n = NM[id]; while (n) { if (n.color) return n.color; if (!n.parentId) return getActiveTheme().root; n = NM[n.parentId]; } return '#6a9bcc'; }
+function branchSide(id) { let n = NM[id]; while (n) { if (n.side) return n.side; if (!n.parentId) return 'right'; n = NM[n.parentId]; } return 'right'; }
+function descendants(id) { const r = [], stk = [...(NM[id]?.children || [])]; while (stk.length) { const x = stk.pop(); r.push(x); if (NM[x]) stk.push(...NM[x].children); } return r; }
+function visKids(id) { const n = NM[id]; if (!n || n.collapsed) return []; return n.children.filter(c => NM[c]); }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  UNDO / REDO
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let undoStack = [], redoStack = [];
+function snapshot() { return JSON.stringify({ nm: serializeAll(), sel: selectedId, nid, themeId: activeThemeId, canvasBg, rainbow: rainbowBranches }); }
+function serializeAll() { const o = {}; for (const [k, n] of Object.entries(NM)) o[k] = { id:n.id, text:n.text, parentId:n.parentId, children:[...n.children], collapsed:n.collapsed, color:n.color, note:n.note, link:n.link, side:n.side }; return o; }
+function restoreSnapshot(s) { const d = JSON.parse(s); NM = {}; nid = d.nid; for (const [k, v] of Object.entries(d.nm)) NM[k] = { ...v, x:0, y:0 }; root = NM[Object.values(NM).find(n=>n.parentId===null)?.id]; selectedId = NM[d.sel]?d.sel:root?.id; if(d.themeId) activeThemeId=d.themeId; if(d.canvasBg!==undefined) canvasBg=d.canvasBg; if(d.rainbow!==undefined) rainbowBranches=d.rainbow; }
+function pushUndo() { undoStack.push(snapshot()); if (undoStack.length > 60) undoStack.shift(); redoStack = []; updateUndoStatus(); }
+function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); restoreSnapshot(undoStack.pop()); applyCanvasBg(); render(); updateUndoStatus(); toast('Undo'); }
+function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restoreSnapshot(redoStack.pop()); applyCanvasBg(); render(); updateUndoStatus(); toast('Redo'); }
+function updateUndoStatus() { document.getElementById('statusUndo').textContent = `Undo: ${undoStack.length} | Redo: ${redoStack.length}`; }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  LAYOUT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function assignSides() { if (!root) return; root.children.filter(c => NM[c]).forEach((cid, i) => { NM[cid].side = i % 2 === 0 ? 'right' : 'left'; }); }
+function subtreeH(id) { const kids = visKids(id); const self = NODE_H[lvl(id)]; if (!kids.length) return self; let t = 0; kids.forEach((c, i) => { t += subtreeH(c); if (i < kids.length - 1) t += V_GAP; }); return Math.max(t, self); }
+function layoutBranch(id, x, cy, dir) {
+  const n = NM[id]; n.x = x; n.y = cy; const kids = visKids(id); if (!kids.length) return;
+  const d = depth(id); const gap = H_GAPS[Math.min(d, 4)] || 140;
+  const childX = dir === 'right' ? x + gap : x - gap;
+  const totalH = kids.reduce((s, c, i) => s + subtreeH(c) + (i > 0 ? V_GAP : 0), 0);
+  let y = cy - totalH / 2;
+  kids.forEach(c => { const sh = subtreeH(c); layoutBranch(c, childX, y + sh / 2, dir); y += sh + V_GAP; });
+}
+function doLayout() {
+  if (!root) return; assignSides(); root.x = ORIGIN_X; root.y = ORIGIN_Y;
+  const rKids = visKids(root.id).filter(c => NM[c].side === 'right');
+  const lKids = visKids(root.id).filter(c => NM[c].side === 'left');
+  const rGap = H_GAPS[0];
+  let rTot = rKids.reduce((s, c, i) => s + subtreeH(c) + (i > 0 ? V_GAP : 0), 0), ry = ORIGIN_Y - rTot / 2;
+  rKids.forEach(c => { const sh = subtreeH(c); layoutBranch(c, ORIGIN_X + rGap, ry + sh / 2, 'right'); ry += sh + V_GAP; });
+  let lTot = lKids.reduce((s, c, i) => s + subtreeH(c) + (i > 0 ? V_GAP : 0), 0), ly = ORIGIN_Y - lTot / 2;
+  lKids.forEach(c => { const sh = subtreeH(c); layoutBranch(c, ORIGIN_X - H_GAPS[0], ly + sh / 2, 'left'); ly += sh + V_GAP; });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  RENDERING
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const world = document.getElementById('world');
+const svg = document.getElementById('connectors');
+const viewport = document.getElementById('viewport');
+let scale = 0.75, panX = 0, panY = 0, nodeEls = {};
+
+function estW(text, d) { const fs = FONT_SIZES[Math.min(d, 4)]; return Math.max(55, text.length * fs * 0.56 + PADDINGS[Math.min(d, 4)]); }
+
+function render() {
+  doLayout(); world.innerHTML = ''; svg.innerHTML = ''; nodeEls = {};
+  if (!root) return;
+  drawEdges(root.id); drawNodes(root.id);
+  applyTransform(); updateStatus(); syncNotesPanel(); renderThemePanel();
+}
+
+function drawEdges(id) {
+  const n = NM[id]; const d = depth(id);
+  visKids(id).forEach(cid => {
+    const c = NM[cid]; const col = branchColor(cid); const side = branchSide(cid);
+    const pw = estW(n.text, d), cw = estW(c.text, depth(cid));
+    let x1, x2;
+    if (side === 'right') { x1 = n.x + pw/2 + 4; x2 = c.x - cw/2 - 2; }
+    else { x1 = n.x - pw/2 - 4; x2 = c.x + cw/2 + 2; }
+    const dx = x2 - x1;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M${x1},${n.y} C${x1+dx*0.4},${n.y} ${x2-dx*0.4},${c.y} ${x2},${c.y}`);
+    path.setAttribute('stroke', col); path.setAttribute('opacity', '0.4');
+    svg.appendChild(path); drawEdges(cid);
+  });
+}
+
+function drawNodes(id) {
+  const n = NM[id]; const d = depth(id); const l = lvl(id);
+  const w = estW(n.text, d); const h = NODE_H[l]; const side = branchSide(id);
+  const el = document.createElement('div');
+  el.className = `mm-node lvl-${l}`;
+  if (id === selectedId) el.classList.add('selected');
+  if (n.collapsed && n.children.length) el.classList.add('collapsed');
+  if (side === 'left') el.classList.add('side-left');
+  if (d >= 1 && d <= 2) { const c = branchColor(id); const p = side === 'left' ? 'borderRight' : 'borderLeft'; el.style[p+'Color'] = c; el.style[p+'Width'] = '3px'; el.style[p+'Style'] = 'solid'; }
+  if (d === 0) el.style.background = n.color || getActiveTheme().root;
+
+  const txt = document.createElement('span'); txt.className = 'node-text'; txt.textContent = n.text; el.appendChild(txt);
+  if (n.note || n.link) { const dot = document.createElement('div'); dot.className = 'note-dot'; el.appendChild(dot); }
+  if (n.children.length) {
+    const dot = document.createElement('div'); dot.className = 'collapse-dot';
+    dot.textContent = n.collapsed ? n.children.length : '−';
+    dot.addEventListener('click', e => { e.stopPropagation(); pushUndo(); n.collapsed = !n.collapsed; render(); });
+    el.appendChild(dot);
+  }
+  el.style.left = (n.x - w/2) + 'px'; el.style.top = (n.y - h/2) + 'px'; el.style.width = w + 'px'; el.style.height = h + 'px';
+  el.addEventListener('mousedown', e => onNodeMouseDown(e, id));
+  el.addEventListener('dblclick', e => { e.stopPropagation(); selectNode(id); editSelected(); });
+  el.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); selectNode(id); showCtxMenu(e.clientX, e.clientY); });
+  world.appendChild(el); nodeEls[id] = el;
+  visKids(id).forEach(c => drawNodes(c));
+}
+
+function applyTransform() { const t = `translate(${panX}px,${panY}px) scale(${scale})`; world.style.transform = t; svg.style.transform = t; svg.style.transformOrigin = '0 0'; }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  THEME PANEL LOGIC
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function switchThemeTab(tab) {
+  activeThemeTab = tab;
+  document.querySelectorAll('.tp-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  renderThemePanel();
+}
+
+function renderThemePanel() {
+  const body = document.getElementById('themeBody');
+  if (!body || !document.getElementById('themePanel').classList.contains('open')) return;
+  body.innerHTML = '';
+
+  // Theme cards
+  const themes = THEMES[activeThemeTab] || [];
+  const grid = document.createElement('div'); grid.className = 'tp-grid';
+  themes.forEach(t => {
+    const card = document.createElement('div');
+    card.className = 'tp-card' + (t.id === activeThemeId ? ' active' : '');
+    card.onclick = () => applyMapTheme(t.id);
+
+    const preview = document.createElement('div'); preview.className = 'tp-card-preview';
+    const rootSwatch = document.createElement('div'); rootSwatch.className = 'tp-card-root';
+    rootSwatch.style.background = t.root; preview.appendChild(rootSwatch);
+    t.branches.slice(0, 5).forEach(c => {
+      const b = document.createElement('div'); b.className = 'tp-card-branch'; b.style.background = c;
+      preview.appendChild(b);
+    });
+    card.appendChild(preview);
+    const name = document.createElement('div'); name.className = 'tp-card-name'; name.textContent = t.name;
+    card.appendChild(name);
+    grid.appendChild(card);
+  });
+  body.appendChild(grid);
+
+  // Rainbow toggle
+  const rainSec = document.createElement('div'); rainSec.className = 'tp-section';
+  rainSec.innerHTML = `<div class="tp-section-title">Branch Colors</div>`;
+  const rainOpt = document.createElement('div'); rainOpt.className = 'tp-option' + (rainbowBranches ? ' active' : '');
+  rainOpt.innerHTML = `<input type="checkbox" ${rainbowBranches ? 'checked' : ''}> <span>Rainbow branches (unique color per branch)</span>`;
+  rainOpt.onclick = () => { pushUndo(); rainbowBranches = !rainbowBranches; recolorBranches(); render(); toast(rainbowBranches ? 'Rainbow on' : 'Uniform branches'); };
+  rainSec.appendChild(rainOpt);
+  body.appendChild(rainSec);
+
+  // Background color
+  const bgSec = document.createElement('div'); bgSec.className = 'tp-section';
+  bgSec.innerHTML = `<div class="tp-section-title">Background Color</div>`;
+  const bgGrid = document.createElement('div'); bgGrid.className = 'bg-grid';
+  const colors = isDark ? BG_COLORS.dark : BG_COLORS.light;
+  colors.forEach(c => {
+    const sw = document.createElement('div'); sw.className = 'bg-swatch';
+    const currentBg = canvasBg || (isDark ? '#101014' : '#f4f3ef');
+    if (c === currentBg) sw.classList.add('active');
+    sw.style.background = c;
+    sw.style.border = `2px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`;
+    sw.onclick = () => { canvasBg = c; applyCanvasBg(); renderThemePanel(); toast('Background updated'); };
+    bgGrid.appendChild(sw);
+  });
+  bgSec.appendChild(bgGrid);
+  body.appendChild(bgSec);
+}
+
+function applyMapTheme(themeId) {
+  pushUndo();
+  activeThemeId = themeId;
+  const theme = getActiveTheme();
+  // Recolor root
+  if (root) root.color = theme.root;
+  recolorBranches();
+  render();
+  toast(`Theme: ${theme.name}`);
+}
+
+function recolorBranches() {
+  if (!root) return;
+  const theme = getActiveTheme();
+  const l1Kids = root.children.filter(c => NM[c]);
+  l1Kids.forEach((cid, i) => {
+    if (rainbowBranches) {
+      NM[cid].color = theme.branches[i % theme.branches.length];
+    } else {
+      NM[cid].color = theme.branches[0];
+    }
+    // Clear child custom colors so they inherit
+    descendants(cid).forEach(did => { if (NM[did]) NM[did].color = null; });
+  });
+}
+
+function applyCanvasBg() {
+  if (canvasBg) {
+    document.getElementById('viewport').style.background = canvasBg;
+    document.documentElement.style.setProperty('--canvas-bg', canvasBg);
+  } else {
+    document.getElementById('viewport').style.background = '';
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  DRAG & DROP
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let dragState = null;
+function onNodeMouseDown(e, id) {
+  if (e.button !== 0) return; e.stopPropagation(); selectNode(id);
+  const sx = e.clientX, sy = e.clientY; let dragging = false, ghost = null;
+  const onMove = ev => {
+    const dx = ev.clientX - sx, dy = ev.clientY - sy;
+    if (!dragging && Math.abs(dx) + Math.abs(dy) > 6) {
+      if (id === root.id) { cleanup(); return; }
+      dragging = true; ghost = document.createElement('div'); ghost.className = 'drag-ghost';
+      ghost.textContent = NM[id].text; document.body.appendChild(ghost); dragState = { id, ghost };
+    }
+    if (dragging && ghost) {
+      ghost.style.left = (ev.clientX + 12) + 'px'; ghost.style.top = (ev.clientY - 14) + 'px';
+      clearDropHL(); const tgt = findDropTarget(ev.clientX, ev.clientY, id);
+      if (tgt && nodeEls[tgt]) nodeEls[tgt].classList.add('drag-over');
+    }
+  };
+  const onUp = ev => {
+    if (dragging) {
+      const tgt = findDropTarget(ev.clientX, ev.clientY, id);
+      if (tgt && tgt !== id && tgt !== NM[id].parentId && !descendants(id).includes(tgt)) {
+        pushUndo(); const old = NM[NM[id].parentId]; if (old) old.children = old.children.filter(c => c !== id);
+        NM[id].parentId = tgt; NM[tgt].children.push(id); NM[tgt].collapsed = false;
+        if (depth(tgt) === 0) NM[id].side = NM[tgt].children.indexOf(id) % 2 === 0 ? 'right' : 'left';
+        else NM[id].side = null;
+        NM[id].color = null; render(); toast('Node moved');
+      }
+      clearDropHL(); if (ghost) ghost.remove(); dragState = null;
+    }
+    cleanup();
+  };
+  const cleanup = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+}
+function findDropTarget(cx, cy, dragId) {
+  const wx = (cx - panX) / scale, wy = (cy - 44 - panY) / scale;
+  let best = null, bd = 80; const desc = descendants(dragId);
+  for (const [id, n] of Object.entries(NM)) { if (+id === dragId || desc.includes(+id)) continue; const d = Math.hypot(wx - n.x, wy - n.y); if (d < bd) { bd = d; best = +id; } }
+  return best;
+}
+function clearDropHL() { document.querySelectorAll('.mm-node.drag-over').forEach(el => el.classList.remove('drag-over')); }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  NODE OPERATIONS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function selectNode(id) { selectedId = id; closeMenus(); render(); }
+function addChild() {
+  const pid = selectedId || root?.id; if (!pid || !NM[pid]) return; pushUndo();
+  NM[pid].collapsed = false;
+  const c = mk('New Topic', pid); const theme = getActiveTheme();
+  if (depth(pid) === 0) c.color = rainbowBranches ? theme.branches[NM[pid].children.length % theme.branches.length] : theme.branches[0];
+  NM[c.id] = c; NM[pid].children.push(c.id); selectedId = c.id; render(); editSelected();
+}
+function addSibling() {
+  if (!selectedId || !NM[selectedId]?.parentId) return; pushUndo();
+  const cur = NM[selectedId], par = NM[cur.parentId]; const theme = getActiveTheme();
+  const s = mk('New Topic', cur.parentId);
+  if (depth(cur.parentId) === 0) s.color = rainbowBranches ? theme.branches[par.children.length % theme.branches.length] : theme.branches[0];
+  NM[s.id] = s; par.children.splice(par.children.indexOf(cur.id) + 1, 0, s.id);
+  selectedId = s.id; render(); editSelected();
+}
+function deleteSelected() {
+  if (!selectedId || selectedId === root?.id) return; pushUndo();
+  const n = NM[selectedId], par = NM[n.parentId];
+  if (par) par.children = par.children.filter(c => c !== selectedId);
+  [selectedId, ...descendants(selectedId)].forEach(id => delete NM[id]);
+  selectedId = n.parentId; closeMenus(); render();
+}
+function editSelected() {
+  if (!selectedId || !nodeEls[selectedId]) return;
+  const txt = nodeEls[selectedId].querySelector('.node-text'); if (!txt) return;
+  txt.contentEditable = 'true'; txt.focus();
+  const range = document.createRange(); range.selectNodeContents(txt);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  const finish = () => {
+    txt.contentEditable = 'false'; const old = NM[selectedId].text;
+    const nw = txt.textContent.trim() || 'Topic';
+    if (nw !== old) { pushUndo(); NM[selectedId].text = nw; }
+    txt.removeEventListener('blur', finish); txt.removeEventListener('keydown', kh); render();
+  };
+  const kh = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(); } if (e.key === 'Escape') { txt.textContent = NM[selectedId].text; finish(); } if (e.key === 'Tab') { e.preventDefault(); finish(); setTimeout(addChild, 30); } };
+  txt.addEventListener('blur', finish); txt.addEventListener('keydown', kh);
+}
+function toggleCollapseSelected() { if (!selectedId) return; const n = NM[selectedId]; if (n?.children.length) { pushUndo(); n.collapsed = !n.collapsed; render(); } }
+function expandAll() { pushUndo(); Object.values(NM).forEach(n => n.collapsed = false); render(); }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  PAN & ZOOM
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let isPanning = false, psx, psy;
+viewport.addEventListener('mousedown', e => { if (e.button !== 0 || e.target.closest('.mm-node')) return; isPanning = true; psx = e.clientX; psy = e.clientY; document.body.classList.add('panning-active'); selectedId = null; closeMenus(); render(); });
+window.addEventListener('mousemove', e => { if (!isPanning) return; panX += e.clientX - psx; panY += e.clientY - psy; psx = e.clientX; psy = e.clientY; applyTransform(); });
+window.addEventListener('mouseup', () => { isPanning = false; document.body.classList.remove('panning-active'); });
+viewport.addEventListener('wheel', e => { e.preventDefault(); const mx = e.clientX, my = e.clientY - 44; const old = scale; scale = Math.max(0.12, Math.min(4, scale * (e.deltaY > 0 ? 0.93 : 1.07))); panX = mx - (mx - panX) * (scale / old); panY = my - (my - panY) * (scale / old); updateZoom(); applyTransform(); }, { passive: false });
+function zoomIn() { zoomBy(1.25); } function zoomOut() { zoomBy(0.8); }
+function zoomBy(f) { const cx = viewport.clientWidth/2, cy = viewport.clientHeight/2; const old = scale; scale = Math.max(0.12, Math.min(4, scale*f)); panX = cx - (cx-panX)*(scale/old); panY = cy - (cy-panY)*(scale/old); updateZoom(); applyTransform(); }
+function updateZoom() { document.getElementById('zoomLabel').textContent = Math.round(scale*100)+'%'; }
+function fitAll() {
+  if (!root) return; let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
+  Object.values(NM).forEach(n => { const w = estW(n.text, depth(n.id)); x0 = Math.min(x0, n.x-w/2-20); x1 = Math.max(x1, n.x+w/2+30); y0 = Math.min(y0, n.y-30); y1 = Math.max(y1, n.y+30); });
+  const w = x1-x0, h = y1-y0, vw = viewport.clientWidth, vh = viewport.clientHeight;
+  scale = Math.max(0.12, Math.min(2.5, Math.min(vw/w, vh/h)*0.85));
+  panX = (vw-w*scale)/2 - x0*scale; panY = (vh-h*scale)/2 - y0*scale; updateZoom(); applyTransform();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  KEYBOARD
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+document.addEventListener('keydown', e => {
+  if (document.activeElement?.contentEditable === 'true' || document.activeElement?.tagName === 'TEXTAREA' || document.activeElement?.tagName === 'INPUT') return;
+  const k = e.key;
+  if (k === 'Tab') { e.preventDefault(); addChild(); } else if (k === 'Enter') { e.preventDefault(); addSibling(); }
+  else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); deleteSelected(); }
+  else if (k === 'F2') { e.preventDefault(); editSelected(); }
+  else if (k === '/') { e.preventDefault(); toggleCollapseSelected(); }
+  else if (k === 'Escape') { selectedId = null; closeMenus(); render(); }
+  else if (k === 'ArrowRight' && selectedId) { const n = NM[selectedId]; const s = branchSide(selectedId); if (s === 'right') { if (n.collapsed && n.children.length) { n.collapsed = false; render(); } else { const v = visKids(selectedId); if (v.length) selectNode(v[0]); } } else { if (n.parentId) selectNode(n.parentId); } }
+  else if (k === 'ArrowLeft' && selectedId) { const n = NM[selectedId]; const s = branchSide(selectedId); if (s === 'left') { if (n.collapsed && n.children.length) { n.collapsed = false; render(); } else { const v = visKids(selectedId); if (v.length) selectNode(v[0]); } } else { if (depth(selectedId) === 0) { const lk = root.children.filter(c => NM[c]?.side === 'left'); if (lk.length) selectNode(lk[0]); } else if (!n.collapsed && n.children.length) { n.collapsed = true; render(); } else if (n.parentId) selectNode(n.parentId); } }
+  else if (k === 'ArrowDown' && selectedId) { navSib(1); }
+  else if (k === 'ArrowUp' && selectedId) { navSib(-1); }
+  else if ((e.ctrlKey||e.metaKey) && k === 'z') { e.preventDefault(); undo(); }
+  else if ((e.ctrlKey||e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+  else if ((e.ctrlKey||e.metaKey) && k === 's') { e.preventDefault(); exportJSON(); }
+});
+function navSib(dir) { const n = NM[selectedId]; if (!n?.parentId) return; const sibs = NM[n.parentId].children; const idx = sibs.indexOf(selectedId) + dir; if (idx >= 0 && idx < sibs.length) selectNode(sibs[idx]); }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  PANELS & MENUS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let openPanelId = null;
+function togglePanel(which) {
+  const panels = { notes: 'notesPanel', themes: 'themePanel' };
+  const btns = { notes: 'btnNotes', themes: 'btnThemes' };
+  if (openPanelId === which) {
+    document.getElementById(panels[which]).classList.remove('open');
+    document.getElementById(btns[which]).classList.remove('active');
+    openPanelId = null;
+  } else {
+    // Close any open panel
+    for (const [k, v] of Object.entries(panels)) {
+      document.getElementById(v).classList.remove('open');
+      document.getElementById(btns[k]).classList.remove('active');
+    }
+    document.getElementById(panels[which]).classList.add('open');
+    document.getElementById(btns[which]).classList.add('active');
+    openPanelId = which;
+    if (which === 'notes') syncNotesPanel();
+    if (which === 'themes') renderThemePanel();
+  }
+}
+
+function syncNotesPanel() {
+  if (openPanelId !== 'notes') return;
+  const note = document.getElementById('npNote'), link = document.getElementById('npLink'), preview = document.getElementById('npLinkPreview');
+  if (selectedId && NM[selectedId]) {
+    const n = NM[selectedId]; document.getElementById('npTitle').textContent = n.text;
+    note.value = n.note || ''; link.value = n.link || '';
+    note.disabled = false; link.disabled = false;
+    if (n.link) { preview.href = n.link; preview.textContent = n.link; preview.style.display = 'block'; } else preview.style.display = 'none';
+  } else {
+    document.getElementById('npTitle').textContent = 'No Selection';
+    note.value = ''; link.value = ''; note.disabled = true; link.disabled = true; preview.style.display = 'none';
+  }
+}
+document.getElementById('npNote').addEventListener('input', e => { if (selectedId && NM[selectedId]) NM[selectedId].note = e.target.value; });
+document.getElementById('npLink').addEventListener('input', e => {
+  if (selectedId && NM[selectedId]) { NM[selectedId].link = e.target.value; const p = document.getElementById('npLinkPreview'); if (e.target.value) { p.href = p.textContent = e.target.value; p.style.display = 'block'; } else p.style.display = 'none'; }
+});
+
+function showCtxMenu(x, y) { const m = document.getElementById('ctxMenu'); m.style.left = x+'px'; m.style.top = y+'px'; m.classList.add('open'); }
+function closeMenus() { ['ctxMenu','colorPicker','exportMenu'].forEach(id => document.getElementById(id).classList.remove('open')); }
+document.addEventListener('click', e => { if (!e.target.closest('.ctx-menu') && !e.target.closest('.color-strip') && !e.target.closest('.export-menu')) closeMenus(); });
+viewport.addEventListener('contextmenu', e => { if (!e.target.closest('.mm-node')) e.preventDefault(); });
+
+function showNodeColorPicker(e) {
+  closeMenus(); if (!selectedId) return;
+  const el = nodeEls[selectedId]; if (!el) return;
+  const pk = document.getElementById('colorPicker'); pk.innerHTML = '';
+  const theme = getActiveTheme();
+  [...theme.branches, theme.root, '#cc5a5a', '#5a5acc'].forEach(c => {
+    const s = document.createElement('div'); s.className = 'color-swatch';
+    if (branchColor(selectedId) === c) s.classList.add('active');
+    s.style.background = c;
+    s.addEventListener('click', () => { pushUndo(); NM[selectedId].color = c; closeMenus(); render(); });
+    pk.appendChild(s);
+  });
+  const r = el.getBoundingClientRect();
+  pk.style.left = r.left+'px'; pk.style.top = (r.bottom+4)+'px'; pk.classList.add('open');
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  LIGHT/DARK THEME
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let isDark = true;
+function toggleTheme() { isDark = !isDark; document.body.classList.toggle('theme-light', !isDark); document.getElementById('themeIcon').textContent = isDark ? '☀' : '☾'; canvasBg = null; applyCanvasBg(); renderThemePanel(); }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  SAVE / LOAD / EXPORT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function serializeTree(id) { const n = NM[id]; return { text: n.text, color: n.color, collapsed: n.collapsed, note: n.note||'', link: n.link||'', side: n.side, children: n.children.map(c => serializeTree(c)) }; }
+function deserializeTree(obj, parentId = null) { const n = mk(obj.text, parentId); n.color = obj.color||null; n.collapsed = obj.collapsed||false; n.note = obj.note||''; n.link = obj.link||''; n.side = obj.side||null; NM[n.id] = n; (obj.children||[]).forEach(co => { const c = deserializeTree(co, n.id); n.children.push(c.id); }); return n; }
+function exportJSON() { if (!root) return; dl(JSON.stringify({ theme: activeThemeId, canvasBg, rainbow: rainbowBranches, tree: serializeTree(root.id) }, null, 2), `mindmap_${Date.now()}.json`, 'application/json'); toast('Saved'); }
+function importJSON() { document.getElementById('fileInput').click(); }
+function handleImport(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      const obj = JSON.parse(ev.target.result);
+      NM = {}; nid = 1;
+      // Support both old format (tree at root) and new format (tree inside .tree)
+      const treeObj = obj.tree || obj;
+      root = deserializeTree(treeObj);
+      if (obj.theme) activeThemeId = obj.theme;
+      if (obj.canvasBg !== undefined) { canvasBg = obj.canvasBg; applyCanvasBg(); }
+      if (obj.rainbow !== undefined) rainbowBranches = obj.rainbow;
+      selectedId = root.id; undoStack = []; redoStack = [];
+      render(); setTimeout(fitAll, 80); toast('Loaded');
+    } catch { toast('Invalid JSON'); }
+  };
+  r.readAsText(f); e.target.value = '';
+}
+
+function showExportMenu(e) { closeMenus(); const m = document.getElementById('exportMenu'); const r = e.target.closest('.tb-btn').getBoundingClientRect(); m.style.left = r.left+'px'; m.style.top = (r.bottom+4)+'px'; m.classList.add('open'); }
+function doExport(type) { closeMenus(); if (type==='json') exportJSON(); else if (type==='md') exportMD(); else if (type==='svg') exportSVG(); else if (type==='png') exportPNG(); }
+
+function exportMD() {
+  if (!root) return; let md = '';
+  function walk(id, indent) { const n = NM[id]; md += (indent===0 ? '# ' : '  '.repeat(indent-1)+'- ') + n.text + '\n'; if (n.note) md += '  '.repeat(Math.max(indent,1))+'  > '+n.note.replace(/\n/g,' ')+'\n'; if (n.link) md += '  '.repeat(Math.max(indent,1))+'  [Link]('+n.link+')\n'; n.children.forEach(c => walk(c, indent+1)); }
+  walk(root.id, 0); dl(md, `mindmap_${Date.now()}.md`, 'text/markdown'); toast('Markdown exported');
+}
+
+function exportSVG() {
+  if (!root) return;
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  Object.values(NM).forEach(n => { const w = estW(n.text, depth(n.id)); x0=Math.min(x0,n.x-w/2-30); x1=Math.max(x1,n.x+w/2+30); y0=Math.min(y0,n.y-40); y1=Math.max(y1,n.y+40); });
+  const W=x1-x0, H=y1-y0; const bg = canvasBg || (isDark?'#101014':'#f4f3ef');
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="${x0} ${y0} ${W} ${H}">\n<rect x="${x0}" y="${y0}" width="${W}" height="${H}" fill="${bg}"/>\n`;
+  function addE(id) { visKids(id).forEach(cid => { const n=NM[id],c=NM[cid],col=branchColor(cid),side=branchSide(cid); const pw=estW(n.text,depth(id)),cw=estW(c.text,depth(cid)); let ex1,ex2; if(side==='right'){ex1=n.x+pw/2+4;ex2=c.x-cw/2-2;}else{ex1=n.x-pw/2-4;ex2=c.x+cw/2+2;} const dx=ex2-ex1; s+=`<path d="M${ex1},${n.y} C${ex1+dx*0.4},${n.y} ${ex2-dx*0.4},${c.y} ${ex2},${c.y}" fill="none" stroke="${col}" stroke-width="2" opacity="0.4"/>\n`; addE(cid); }); }
+  addE(root.id);
+  function addN(id) { const n=NM[id],d=depth(id),w=estW(n.text,d),h=NODE_H[lvl(id)]; const nbg=d===0?(n.color||getActiveTheme().root):(isDark?'#1e1e28':'#fff'); const fg=d===0?'#fff':(isDark?'#e8e6e1':'#1a1a1a'); const fs=FONT_SIZES[lvl(id)]; s+=`<rect x="${n.x-w/2}" y="${n.y-h/2}" width="${w}" height="${h}" rx="8" fill="${nbg}" stroke="${isDark?'#2e2e3c':'#d8d6d0'}" stroke-width="1.5"/>\n`; s+=`<text x="${n.x}" y="${n.y+fs*0.35}" text-anchor="middle" font-family="DM Sans,sans-serif" font-size="${fs}" font-weight="${d===0?700:d===1?600:500}" fill="${fg}">${esc(n.text)}</text>\n`; visKids(id).forEach(c=>addN(c)); }
+  addN(root.id); s+='</svg>'; dl(s, `mindmap_${Date.now()}.svg`, 'image/svg+xml'); toast('SVG exported');
+}
+
+function exportPNG() {
+  if (!root) return;
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  Object.values(NM).forEach(n=>{const w=estW(n.text,depth(n.id));x0=Math.min(x0,n.x-w/2-40);x1=Math.max(x1,n.x+w/2+40);y0=Math.min(y0,n.y-50);y1=Math.max(y1,n.y+50);});
+  const W=x1-x0,H=y1-y0,dpr=2,bg=canvasBg||(isDark?'#101014':'#f4f3ef');
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="${x0} ${y0} ${W} ${H}"><rect x="${x0}" y="${y0}" width="${W}" height="${H}" fill="${bg}"/>`;
+  function addE(id){visKids(id).forEach(cid=>{const n=NM[id],c=NM[cid],col=branchColor(cid),side=branchSide(cid);const pw=estW(n.text,depth(id)),cw=estW(c.text,depth(cid));let ex1,ex2;if(side==='right'){ex1=n.x+pw/2+4;ex2=c.x-cw/2-2;}else{ex1=n.x-pw/2-4;ex2=c.x+cw/2+2;}const dx=ex2-ex1;s+=`<path d="M${ex1},${n.y} C${ex1+dx*0.4},${n.y} ${ex2-dx*0.4},${c.y} ${ex2},${c.y}" fill="none" stroke="${col}" stroke-width="2" opacity="0.4"/>`;addE(cid);});}
+  addE(root.id);
+  function addN(id){const n=NM[id],d=depth(id),w=estW(n.text,d),h=NODE_H[lvl(id)];const nbg=d===0?(n.color||getActiveTheme().root):(isDark?'#1e1e28':'#fff');const fg=d===0?'#fff':(isDark?'#e8e6e1':'#1a1a1a');const fs=FONT_SIZES[lvl(id)];s+=`<rect x="${n.x-w/2}" y="${n.y-h/2}" width="${w}" height="${h}" rx="8" fill="${nbg}" stroke="${isDark?'#2e2e3c':'#d8d6d0'}" stroke-width="1.5"/>`;s+=`<text x="${n.x}" y="${n.y+fs*0.35}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${fs}" font-weight="${d===0?700:d===1?600:500}" fill="${fg}">${esc(n.text)}</text>`;visKids(id).forEach(c=>addN(c));}
+  addN(root.id); s+='</svg>';
+  const canvas=document.createElement('canvas');canvas.width=W*dpr;canvas.height=H*dpr;const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+  const img=new Image();const blob=new Blob([s],{type:'image/svg+xml;charset=utf-8'});const url=URL.createObjectURL(blob);
+  img.onload=()=>{ctx.drawImage(img,0,0,W,H);URL.revokeObjectURL(url);canvas.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`mindmap_${Date.now()}.png`;a.click();toast('PNG exported @2x');},'image/png');};
+  img.src=url;
+}
+
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function dl(c,n,t){const b=new Blob([c],{type:t});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click();URL.revokeObjectURL(a.href);}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800);}
+function updateStatus(){const c=Object.keys(NM).length;document.getElementById('statusNodes').textContent=c+' nodes';document.getElementById('statusSelected').textContent=selectedId&&NM[selectedId]?`"${NM[selectedId].text}" (L${depth(selectedId)})`:'None';updateUndoStatus();}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  INIT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+activeThemeId = 'c-default';
+initDefault();
+render();
+setTimeout(() => { selectedId = root.id; render(); fitAll(); }, 60);
+</script>
+</body>
+</html>
